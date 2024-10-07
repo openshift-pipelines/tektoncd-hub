@@ -1,4 +1,8 @@
 contentOrigin:
   repofiles:
     - ./ubi.repo
-packages: [shadow-utils]
+packages:
+  - shadow-utils
+  - openssh-clients
+  - git
+  - git-lfs
