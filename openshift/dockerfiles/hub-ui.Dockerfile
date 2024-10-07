@@ -7,7 +7,6 @@ FROM $GO_BUILDER AS BUILD
 ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 WORKDIR /go/src/github.com/tektoncd/hub
 COPY upstream .
-COPY --chown=1001 $REMOTE_SOURCE
 COPY --chown=1001 patches patches/
 RUN set -e; for f in patches/*.patch; do echo foo ${f}; [[ -f ${f} ]] || continue; git apply ${f}; done
 
