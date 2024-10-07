@@ -1,0 +1,17 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build","bundle":"latest"}'
+  name: tektoncd-hub-main-hub-ui
+spec:
+  componentName: hub-ui
+  application: tektoncd-hub-main
+  build-nudges-ref:
+  - operator-main-bundle
+  source:
+    git:
+      url: https://github.com/openshift-pipelines/tektoncd-hub
+      dockerfileUrl: openshift/dockerfiles/hub-ui.Dockerfile
+      revision: main
