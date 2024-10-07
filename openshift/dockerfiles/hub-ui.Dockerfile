@@ -4,7 +4,7 @@ ARG RUNTIME=registry.access.redhat.com/ubi8/nginx-122:latest
 
 FROM $GO_BUILDER AS BUILD
 
-ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
+ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub/upstream
 WORKDIR /go/src/github.com/tektoncd/hub
 COPY upstream .
 COPY --chown=1001 patches patches/
