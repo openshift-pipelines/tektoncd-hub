@@ -1,13 +1,15 @@
 # --- builder image
-ARG GO_BUILDER=registry.access.redhat.com/ubi8/nodejs-16:latest
+ARG NODEJS_BUILDER=registry.access.redhat.com/ubi8/nodejs-18:latest
 ARG RUNTIME=registry.access.redhat.com/ubi8/nginx-122:latest
 
-FROM $GO_BUILDER AS BUILD
+FROM $NODEJS_BUILDER AS builder
 
-ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub/upstream
-WORKDIR /go/src/github.com/tektoncd/hub
+ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
+
+WORKDIR $REMOTE_SOURCE
+
 COPY upstream .
-COPY --chown=1001 patches patches/
+COPY patches patches/
 RUN set -e; for f in patches/*.patch; do echo foo ${f}; [[ -f ${f} ]] || continue; git apply ${f}; done
 
 WORKDIR $REMOTE_SOURCE/ui
@@ -17,11 +19,12 @@ RUN npm clean-install --legacy-peer-deps && \
 
 # --- runtime image
 FROM $RUNTIME
-ARG VERSION=hub-main
+ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 
-COPY --from=BUILD $REMOTE_SOURCE/ui/build /opt/app-root/src
-COPY --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
+COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
+COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
 ENV BASE_PATH="/opt/app-root/src"
+ARG VERSION=hub-main
 
 USER root
 RUN chmod ugo+rw /opt/app-root/src/config.js && \
@@ -31,7 +34,7 @@ USER nginx
 
 EXPOSE 8080
 
-COPY --chown=1001 $REMOTE_SOURCE/ui/image/location.locations "${NGINX_DEFAULT_CONF_PATH}"/location.conf
+COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/location.locations "${NGINX_DEFAULT_CONF_PATH}"/location.conf
 
 CMD /usr/bin/start.sh
 
