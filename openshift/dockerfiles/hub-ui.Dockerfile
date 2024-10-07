@@ -12,7 +12,8 @@ RUN set -e; for f in patches/*.patch; do echo foo ${f}; [[ -f ${f} ]] || continu
 
 WORKDIR $REMOTE_SOURCE/ui
 
-RUN npm clean-install --legacy-peer-deps && \
+RUN source $CACHITO_ENV_FILE && \
+    npm clean-install --legacy-peer-deps && \
     npm run build
 
 # --- runtime image
