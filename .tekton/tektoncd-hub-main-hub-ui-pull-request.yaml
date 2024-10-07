@@ -38,7 +38,7 @@ spec:
     value: "true"
   - name: prefetch-input
     value: |
-      {"type": "npm", "path": "openshift/npms"}
+      {"type": "npm", "path": "upstream/ui"}
   pipelineRef:
     name: docker-build
   workspaces:
