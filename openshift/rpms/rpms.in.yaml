@@ -6,3 +6,9 @@ packages:
   - openssh-clients
   - git
   - git-lfs
+arches:
+  # The list of architectures
+  - aarch64
+  - x86_64
+  - ppc64le
+  - s390x
