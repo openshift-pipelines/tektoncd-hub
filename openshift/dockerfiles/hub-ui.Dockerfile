@@ -14,7 +14,9 @@ RUN set -e; for f in patches/*.patch; do echo foo ${f}; [[ -f ${f} ]] || continu
 
 WORKDIR $REMOTE_SOURCE/ui
 
-RUN sudo chmod -R u+w $REMOTE_SOURCE/ui
+RUN chown -R node:node $REMOTE_SOURCE/ui
+
+USER node
 
 RUN npm clean-install --legacy-peer-deps && \
     npm run build
