@@ -9,14 +9,11 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 WORKDIR $REMOTE_SOURCE
 
 COPY upstream .
+RUN chmod -R g+w $REMOTE_SOURCE
 COPY patches patches/
 RUN set -e; for f in patches/*.patch; do echo foo ${f}; [[ -f ${f} ]] || continue; git apply ${f}; done
 
 WORKDIR $REMOTE_SOURCE/ui
-
-RUN chown -R node:node $REMOTE_SOURCE/ui
-
-USER node
 
 RUN npm clean-install --legacy-peer-deps && \
     npm run build
