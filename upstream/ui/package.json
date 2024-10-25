@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
-    "@patternfly/patternfly": "^5.4.2",
+    "@patternfly/patternfly": "^6.0.0",
     "@patternfly/react-core": "^4.276.6",
     "@seiboston/react-ghe-login": "^1.0.1",
     "@testing-library/jest-dom": "^6.6.2",
@@ -70,7 +70,7 @@
     "@testing-library/react-hooks": "^8.0.1",
     "@types/react": "^16.14.28",
     "@typescript-eslint/eslint-plugin": "8.11.0",
-    "@typescript-eslint/parser": "8.10.0",
+    "@typescript-eslint/parser": "8.11.0",
     "assert": "^2.1.0",
     "buffer": "^6.0.3",
     "crypto-browserify": "^3.12.1",
