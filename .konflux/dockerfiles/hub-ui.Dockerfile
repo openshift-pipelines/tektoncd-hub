@@ -11,7 +11,7 @@ WORKDIR $REMOTE_SOURCE
 COPY upstream .
 USER root
 RUN chmod -R g+w $REMOTE_SOURCE
-COPY patches patches/
+COPY .konflux/patches patches/
 RUN set -e; for f in patches/*.patch; do echo foo ${f}; [[ -f ${f} ]] || continue; git apply ${f}; done
 
 WORKDIR $REMOTE_SOURCE/ui
