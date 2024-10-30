@@ -9,8 +9,8 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
       == "main" &&
-      ("upstream/***".pathChanged() || "openshift/patches/***".pathChanged() || "openshift/rpms/***".pathChanged() ||
-      "openshift/dockerfiles/hub-ui.Dockerfile".pathChanged() ||
+      ("upstream/***".pathChanged() || ".konflux/patches/***".pathChanged() || ".konflux/rpms/***".pathChanged() ||
+      ".konflux/dockerfiles/hub-ui.Dockerfile".pathChanged() ||
       ".tekton/tektoncd-hub-main-hub-ui-push.yaml".pathChanged() ||
       ".tekton/docker-build-ta.yaml".pathChanged())
   creationTimestamp: null
@@ -29,13 +29,7 @@ spec:
   - name: output-image
     value: quay.io/redhat-user-workloads/tekton-ecosystem-tenant/tektoncd-hub-main/hub-ui:{{revision}}
   - name: dockerfile
-    value: openshift/dockerfiles/hub-ui.Dockerfile
-  - name: build-platforms
-    value:
-      - linux/x86_64
-      - linux-m2xlarge/arm64
-      - linux/ppc64le
-      - linux/s390x
+    value: .konflux/dockerfiles/hub-ui.Dockerfile
   - name: prefetch-input
     value: |
       {"type": "npm", "path": "upstream/ui"}
