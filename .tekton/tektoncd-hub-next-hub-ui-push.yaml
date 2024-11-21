@@ -8,17 +8,17 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main" &&
+      == "next" &&
       ("upstream/***".pathChanged() || ".konflux/patches/***".pathChanged() || ".konflux/rpms/***".pathChanged() ||
       ".konflux/dockerfiles/hub-ui.Dockerfile".pathChanged() ||
-      ".tekton/tektoncd-hub-main-hub-ui-push.yaml".pathChanged() ||
+      ".tekton/tektoncd-hub-next-hub-ui-push.yaml".pathChanged() ||
       ".tekton/docker-build-ta.yaml".pathChanged())
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: tektoncd-hub-main
-    appstudio.openshift.io/component: tektoncd-hub-main-hub-ui
+    appstudio.openshift.io/application: tektoncd-hub-next
+    appstudio.openshift.io/component: tektoncd-hub-next-hub-ui
     pipelines.appstudio.openshift.io/type: build
-  name: tektoncd-hub-main-hub-ui-on-push
+  name: tektoncd-hub-next-hub-ui-on-push
   namespace: tekton-ecosystem-tenant
 spec:
   params:
@@ -27,7 +27,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/tekton-ecosystem-tenant/tektoncd-hub-main/hub-ui:{{revision}}
+    value: quay.io/redhat-user-workloads/tekton-ecosystem-tenant/tektoncd-hub-next/hub-ui:{{revision}}
   - name: dockerfile
     value: .konflux/dockerfiles/hub-ui.Dockerfile
   - name: prefetch-input
