@@ -28,6 +28,7 @@ jobs:
         git checkout -B release-v1.19.0 origin/release-v1.19.0
         popd
 
+
     - name: Commit new changes
       run: |
         git config user.name openshift-pipelines-bot
