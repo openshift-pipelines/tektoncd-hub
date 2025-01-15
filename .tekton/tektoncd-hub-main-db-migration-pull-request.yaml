@@ -14,8 +14,7 @@ metadata:
       == "main" &&
       ("upstream/***".pathChanged() || ".konflux/patches/***".pathChanged() || ".konflux/rpms/***".pathChanged() ||
       ".konflux/dockerfiles/db-migration.Dockerfile".pathChanged() ||
-      ".tekton/tektoncd-hub-main-db-migration-pull-request.yaml".pathChanged() ||
-      ".tekton/docker-build-ta.yaml".pathChanged())
+      ".tekton/tektoncd-hub-main-db-migration-pull-request.yaml".pathChanged())
   creationTimestamp: null
   labels:
     appstudio.openshift.io/application: tektoncd-hub-main
