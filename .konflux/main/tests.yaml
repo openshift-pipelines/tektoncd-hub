@@ -3,17 +3,23 @@
 apiVersion: appstudio.redhat.com/v1beta2
 kind: IntegrationTestScenario
 metadata:
-  name: tektoncd-hub-main-enterprise-contract-group
+  name: tektoncd-hub-main-enterprise-contract
 spec:
   application: tektoncd-hub-main
   contexts:
-    - description: Application testing
-      name: group
+    - description: Application testing for tektoncd-hub-main-db-migration
+      name: component_tektoncd-hub-main-db-migration
+    - description: Application testing for tektoncd-hub-main-hub-api
+      name: component_tektoncd-hub-main-hub-api
+    - description: Application testing for tektoncd-hub-main-hub-ui
+      name: component_tektoncd-hub-main-hub-ui
   params:
     - name: POLICY_CONFIGURATION
       value: tekton-ecosystem-tenant/tekton-ecosystem-tenant-containers
     - name: TIMEOUT
       value: "15m0s"
+    - name: SINGLE_COMPONENT
+      value: "true"
   resolverRef:
     params:
       - name: url
