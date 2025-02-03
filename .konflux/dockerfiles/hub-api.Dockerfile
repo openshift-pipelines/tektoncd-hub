@@ -15,7 +15,7 @@ RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vend
     ./api/cmd/api
 
 FROM $RUNTIME
-ARG VERSION=hub-main
+ARG VERSION=hub-1.18
 
 RUN microdnf install -y openssh-clients git shadow-utils
 
@@ -26,7 +26,7 @@ EXPOSE 8000
 
 LABEL \
     com.redhat.component="openshift-pipelines-hub-api-container" \
-    name="openshift-pipelines/pipelines-hub-api-rhel8" \
+    name="openshift-pipelines/pipelines-hub-api-rhel9" \
     version=$VERSION \
     summary="Red Hat OpenShift Pipelines Hub API" \
     maintainer="pipelines-extcomm@redhat.com" \
