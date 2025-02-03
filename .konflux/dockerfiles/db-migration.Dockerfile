@@ -15,7 +15,7 @@ RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vend
     ./api/cmd/db
 
 FROM $RUNTIME
-ARG VERSION=hub-main
+ARG VERSION=hub-1.18
 
 COPY --from=builder /tmp/hub-db-migration /ko-app/hub-db-migration
 COPY head ${KO_DATA_PATH}/HEAD
@@ -24,7 +24,7 @@ EXPOSE 8000
 
 LABEL \
     com.redhat.component="openshift-pipelines-hub-db-migration-container" \
-    name="openshift-pipelines/pipelines-hub-db-migration-rhel8" \
+    name="openshift-pipelines/pipelines-hub-db-migration-rhel9" \
     version=$VERSION \
     summary="Red Hat OpenShift Pipelines Hub DB Migration" \
     maintainer="pipelines-extcomm@redhat.com" \
