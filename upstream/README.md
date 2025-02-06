@@ -29,7 +29,7 @@ contains the source code of this service.
      - User can rate a resource based on the experience
      - This can even help the other user as by knowing the rating they can directly compare and use the resource
 
-  5. Sort resources on the basis of name or rating.
+  5. Sort resources on the basis of name or rating
 
   6. Install resources on cluster :
      - The Tekton Hub provides cluster installation commands for tasks or pipelines.
