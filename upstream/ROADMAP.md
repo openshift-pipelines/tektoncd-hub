@@ -33,7 +33,7 @@
 ### Versioning of the APIs
 
  - APIs should be versioned.
- - API Policy should be defined
+ - API Policy should be defined.
 
 ### Automation of Categories and Tags mapping
 
