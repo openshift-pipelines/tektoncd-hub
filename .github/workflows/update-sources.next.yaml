@@ -18,14 +18,14 @@ jobs:
     - name: Checkout the current repo
       uses: actions/checkout@v4
       with:
-        ref: next
+        ref: release-v1.18.x
 
     - name: Clone tektoncd/hub
       run: |
         rm -fR upstream
         git clone https://github.com/tektoncd/hub upstream
         pushd upstream
-        git checkout -B release-v1.20.0 origin/release-v1.20.0
+        git checkout -B  origin/
         popd
 
 
@@ -65,7 +65,7 @@ jobs:
 
         if [ "$(gh pr list --base next --head actions/update/sources-next --json url --jq 'length')" = "0" ]; then
           echo "creating PR..."
-          gh pr create -B next -H actions/update/sources-next --label=automated --label=upstream --fill
+          gh pr create -B release-v1.18.x -H actions/update/sources-next --label=automated --label=upstream --fill
         else
           echo "a PR already exists, editing..."
           gh pr edit --title "[bot] Update next from tektoncd/hub to ${NEW_COMMIT}" --body "$(cat /tmp/diff.txt | sed 's/^/    /' | head -c 55555)"

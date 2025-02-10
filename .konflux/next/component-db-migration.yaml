@@ -15,4 +15,4 @@ spec:
     git:
       url: https://github.com/openshift-pipelines/tektoncd-hub
       dockerfileUrl: .konflux/dockerfiles/db-migration.Dockerfile
-      revision: next
+      revision: release-v1.18.x
