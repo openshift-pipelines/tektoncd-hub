@@ -16,7 +16,7 @@ RUN set -e; for f in patches/*.patch; do echo foo ${f}; [[ -f ${f} ]] || continu
 
 WORKDIR $REMOTE_SOURCE/ui
 
-RUN npm clean-install --legacy-peer-deps && \
+RUN npm clean-install --legacy-peer-deps --max-old-space-size=4096 && \
     npm run build
 
 # --- runtime image
