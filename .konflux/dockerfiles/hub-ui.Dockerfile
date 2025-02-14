@@ -1,6 +1,6 @@
 # --- builder image
 ARG NODEJS_BUILDER=registry.redhat.io/ubi9/nodejs-18@sha256:07c63a0d34c93d332e3ed0a71a928a4928072f72e04616713c4786d70fa3eb0f
-ARG RUNTIME=registry.access.redhat.com/ubi9/nginx-122@sha256:64c050aec88515b60064fc5d60fbb4570d7933dd69c638ed0b824929964b3b95
+ARG RUNTIME=registry.redhat.io/ubi9/nginx-124@sha256:e4b0d217acc82d354469141ae3a19b159361192aa93abab471656d9aad50e3d4
 
 FROM $NODEJS_BUILDER AS builder
 
@@ -30,10 +30,14 @@ ENV BASE_PATH="/opt/app-root/src"
 ARG VERSION=hub-1.18
 
 USER root
+RUN dnf install -y openssl-libs && \
+    dnf install -y libxml2 && \
+    dnf install -y openssl
+
 RUN chmod ugo+rw /opt/app-root/src/config.js && \
     chown nginx:nginx /opt/app-root/src/config.js && \
-    chmod +x /usr/bin/start.sh && \
-    dnf install -y openssl-libs libxml2 openssl
+    chmod +x /usr/bin/start.sh
+
 USER nginx
 
 EXPOSE 8080
