@@ -3,13 +3,13 @@
 apiVersion: appstudio.redhat.com/v1alpha1
 kind: ImageRepository
 metadata:
-  name: tektoncd-hub-next-hub-api
+  name: next-hub-api-rhel9
   annotations:
     image-controller.appstudio.redhat.com/update-component-image: "true"
   labels:
-    appstudio.redhat.com/component: tektoncd-hub-next-hub-api
+    appstudio.redhat.com/component: tektoncd-hub-next-api
     appstudio.redhat.com/application: tektoncd-hub-next
 spec:
   image:
-   name: tektoncd-hub-next/hub-api
+   name: next/hub-api-rhel9
    visibility: public
