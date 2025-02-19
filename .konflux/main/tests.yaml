@@ -9,10 +9,10 @@ spec:
   contexts:
     - description: Application testing for tektoncd-hub-main-db-migration
       name: component_tektoncd-hub-main-db-migration
-    - description: Application testing for tektoncd-hub-main-hub-api
-      name: component_tektoncd-hub-main-hub-api
-    - description: Application testing for tektoncd-hub-main-hub-ui
-      name: component_tektoncd-hub-main-hub-ui
+    - description: Application testing for tektoncd-hub-main-api
+      name: component_tektoncd-hub-main-api
+    - description: Application testing for tektoncd-hub-main-ui
+      name: component_tektoncd-hub-main-ui
   params:
     - name: POLICY_CONFIGURATION
       value: tekton-ecosystem-tenant/tekton-ecosystem-tenant-containers
