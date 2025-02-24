@@ -21,7 +21,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/markbates/goth v1.80.0
 	github.com/mitchellh/go-homedir v1.1.0
-	github.com/spf13/cobra v1.8.1
+	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tektoncd/pipeline v0.68.0
@@ -35,7 +35,7 @@ require (
 	gopkg.in/h2non/gock.v1 v1.1.2
 	gorm.io/driver/postgres v1.5.2
 	gorm.io/gorm v1.25.12
-	gotest.tools/v3 v3.5.1
+	gotest.tools/v3 v3.5.2
 	k8s.io/apimachinery v0.29.13
 	k8s.io/client-go v0.29.13
 	knative.dev/pkg v0.0.0-20240416145024-0f34a8815650
@@ -157,7 +157,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/titanous/rocacheck v0.0.0-20171023193734-afe73141d399 // indirect
