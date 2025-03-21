@@ -28,7 +28,7 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/tekton-ecosystem-tenant/1-17/hub-db-migration-rhel9:{{revision}}
+    value: quay.io/redhat-user-workloads/tekton-ecosystem-tenant/1-17/hub-db-migration-rhel8:{{revision}}
   - name: dockerfile
     value: .konflux/dockerfiles/db-migration.Dockerfile
   - name: prefetch-input
