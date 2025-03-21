@@ -906,10 +906,7 @@ func (p *sessionPool) createMultiplexedSession() {
 				p.mu.Lock()
 				p.multiplexedSessionCreationError = err
 				p.mu.Unlock()
-				select {
-				case p.mayGetMultiplexedSession <- true:
-				case <-c.ctx.Done():
-				}
+				p.mayGetMultiplexedSession <- true
 				continue
 			}
 			p.sc.executeCreateMultiplexedSession(c.ctx, client, p.sc.md, p)
