@@ -12,8 +12,6 @@
 	{{- range .Services }}
 		{{- if .Methods }}
 			{{ .VarName }}Endpoints = {{ .PkgName }}.NewEndpoints({{ .VarName }}Svc)
-			{{ .VarName }}Endpoints.Use(debug.LogPayloads())
-			{{ .VarName }}Endpoints.Use(log.Endpoint)
 		{{- end }}
 	{{- end }}
 	}

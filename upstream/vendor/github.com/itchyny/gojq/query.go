@@ -63,8 +63,13 @@ func (e *Query) writeTo(s *strings.Builder) {
 	for _, im := range e.Imports {
 		im.writeTo(s)
 	}
-	for _, fd := range e.FuncDefs {
+	for i, fd := range e.FuncDefs {
+		if i > 0 {
+			s.WriteByte(' ')
+		}
 		fd.writeTo(s)
+	}
+	if len(e.FuncDefs) > 0 {
 		s.WriteByte(' ')
 	}
 	if e.Func != "" {
@@ -669,7 +674,7 @@ type ObjectKeyVal struct {
 	Key       string
 	KeyString *String
 	KeyQuery  *Query
-	Val       *Query
+	Val       *ObjectVal
 }
 
 func (e *ObjectKeyVal) String() string {
@@ -702,6 +707,32 @@ func (e *ObjectKeyVal) minify() {
 	}
 	if e.Val != nil {
 		e.Val.minify()
+	}
+}
+
+// ObjectVal ...
+type ObjectVal struct {
+	Queries []*Query
+}
+
+func (e *ObjectVal) String() string {
+	var s strings.Builder
+	e.writeTo(&s)
+	return s.String()
+}
+
+func (e *ObjectVal) writeTo(s *strings.Builder) {
+	for i, e := range e.Queries {
+		if i > 0 {
+			s.WriteString(" | ")
+		}
+		e.writeTo(s)
+	}
+}
+
+func (e *ObjectVal) minify() {
+	for _, e := range e.Queries {
+		e.minify()
 	}
 }
 
@@ -912,7 +943,7 @@ func (e *Try) minify() {
 
 // Reduce ...
 type Reduce struct {
-	Query   *Query
+	Term    *Term
 	Pattern *Pattern
 	Start   *Query
 	Update  *Query
@@ -926,7 +957,7 @@ func (e *Reduce) String() string {
 
 func (e *Reduce) writeTo(s *strings.Builder) {
 	s.WriteString("reduce ")
-	e.Query.writeTo(s)
+	e.Term.writeTo(s)
 	s.WriteString(" as ")
 	e.Pattern.writeTo(s)
 	s.WriteString(" (")
@@ -937,14 +968,14 @@ func (e *Reduce) writeTo(s *strings.Builder) {
 }
 
 func (e *Reduce) minify() {
-	e.Query.minify()
+	e.Term.minify()
 	e.Start.minify()
 	e.Update.minify()
 }
 
 // Foreach ...
 type Foreach struct {
-	Query   *Query
+	Term    *Term
 	Pattern *Pattern
 	Start   *Query
 	Update  *Query
@@ -959,7 +990,7 @@ func (e *Foreach) String() string {
 
 func (e *Foreach) writeTo(s *strings.Builder) {
 	s.WriteString("foreach ")
-	e.Query.writeTo(s)
+	e.Term.writeTo(s)
 	s.WriteString(" as ")
 	e.Pattern.writeTo(s)
 	s.WriteString(" (")
@@ -974,7 +1005,7 @@ func (e *Foreach) writeTo(s *strings.Builder) {
 }
 
 func (e *Foreach) minify() {
-	e.Query.minify()
+	e.Term.minify()
 	e.Start.minify()
 	e.Update.minify()
 	if e.Extract != nil {
