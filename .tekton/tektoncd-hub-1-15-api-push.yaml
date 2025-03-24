@@ -7,20 +7,19 @@ metadata:
     pipelinesascode.tekton.dev/pipeline: "https://raw.githubusercontent.com/openshift-pipelines/operator/refs/heads/main/.tekton/docker-build-ta.yaml"
     build.appstudio.openshift.io/repo: https://github.com/openshift-pipelines/tektoncd-hub.git?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
-    build.appstudio.redhat.com/pull_request_number: '{{pull_request_number}}'
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-      == "release-v1.17.x" &&
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
+      == "release-v1.15.x" &&
       ("upstream/***".pathChanged() || ".konflux/patches/***".pathChanged() || ".konflux/rpms/***".pathChanged() ||
-      ".konflux/dockerfiles/ui.Dockerfile".pathChanged() ||
-      ".tekton/tektoncd-hub-1-17-ui-pull-request.yaml".pathChanged())
+      ".konflux/dockerfiles/api.Dockerfile".pathChanged() ||
+      ".tekton/tektoncd-hub-1-15-api-push.yaml".pathChanged())
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: openshift-pipelines-1-17
-    appstudio.openshift.io/component: tektoncd-hub-1-17-ui
+    appstudio.openshift.io/application: openshift-pipelines-1-15
+    appstudio.openshift.io/component: tektoncd-hub-1-15-api
     pipelines.appstudio.openshift.io/type: build
-  name: tektoncd-hub-1-17-ui-on-pull-request
+  name: tektoncd-hub-1-15-api-on-push
   namespace: tekton-ecosystem-tenant
 spec:
   params:
@@ -29,17 +28,12 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/tekton-ecosystem-tenant/1-17/hub-ui-rhel8:on-pr-{{revision}}
-  - name: image-expires-after
-    value: 5d
+    value: quay.io/redhat-user-workloads/tekton-ecosystem-tenant/1-15/hub-api-rhel8:{{revision}}
   - name: dockerfile
-    value: .konflux/dockerfiles/ui.Dockerfile
-  - name: build-platforms
-    value:
-    - linux/x86_64
+    value: .konflux/dockerfiles/api.Dockerfile
   - name: prefetch-input
     value: |
-      [{"type": "npm", "path": "upstream/ui"}, {"type": "rpm", "path": ".konflux/rpms"}]
+      {"type": "rpm", "path": ".konflux/rpms"}
   pipelineRef:
     name: docker-build-ta
   workspaces:
