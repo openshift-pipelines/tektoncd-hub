@@ -1,7 +1,6 @@
 package expr
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -58,10 +57,7 @@ func (s *ServerExpr) EvalName() string { return "Server " + s.Name }
 func (s *ServerExpr) Validate() error {
 	verr := new(eval.ValidationErrors)
 	for _, h := range s.Hosts {
-		var verrs *eval.ValidationErrors
-		if errors.As(h.Validate(), &verrs) {
-			verr.Merge(verrs)
-		}
+		verr.Merge(h.Validate().(*eval.ValidationErrors))
 	}
 	for _, svc := range s.Services {
 		if Root.Service(svc) == nil {

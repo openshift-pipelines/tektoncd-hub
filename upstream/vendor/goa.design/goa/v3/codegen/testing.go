@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	"goa.design/goa/v3/eval"
 	"goa.design/goa/v3/expr"
+
+	"github.com/sergi/go-diff/diffmatchpatch"
 )
 
 // RunDSL returns the DSL root resulting from running the given DSL.
@@ -17,13 +19,21 @@ func RunDSL(t *testing.T, dsl func()) *expr.RootExpr {
 	t.Helper()
 	eval.Reset()
 	expr.Root = new(expr.RootExpr)
-	expr.GeneratedResultTypes = new(expr.ResultTypesRoot)
-	require.NoError(t, eval.Register(expr.Root))
-	require.NoError(t, eval.Register(expr.GeneratedResultTypes))
+	expr.Root.GeneratedTypes = &expr.GeneratedRoot{}
+	if err := eval.Register(expr.Root); err != nil {
+		t.Fatal(err)
+	}
+	if err := eval.Register(expr.Root.GeneratedTypes); err != nil {
+		t.Fatal(err)
+	}
 	expr.Root.API = expr.NewAPIExpr("test api", func() {})
 	expr.Root.API.Servers = []*expr.ServerExpr{expr.Root.API.DefaultServer()}
-	require.True(t, eval.Execute(dsl, nil), eval.Context.Error())
-	require.NoError(t, eval.RunDSL())
+	if !eval.Execute(dsl, nil) {
+		t.Fatal(eval.Context.Error())
+	}
+	if err := eval.RunDSL(); err != nil {
+		t.Fatal(err)
+	}
 	return expr.Root
 }
 
@@ -42,16 +52,22 @@ func SectionsCode(t *testing.T, sections []*SectionTemplate) string {
 }
 
 // SectionCodeFromImportsAndMethods generates and formats the code for given import and method definition sections.
-func SectionCodeFromImportsAndMethods(t *testing.T, importSection, methodSection *SectionTemplate) string {
+func SectionCodeFromImportsAndMethods(t *testing.T, importSection *SectionTemplate, methodSection *SectionTemplate) string {
 	t.Helper()
 	var code bytes.Buffer
-	require.NoError(t, importSection.Write(&code))
+	if err := importSection.Write(&code); err != nil {
+		t.Fatal(err)
+	}
+
 	return sectionCodeWithPrefix(t, methodSection, code.String())
 }
 
 func sectionCodeWithPrefix(t *testing.T, section *SectionTemplate, prefix string) string {
 	var code bytes.Buffer
-	require.NoError(t, section.Write(&code))
+	if err := section.Write(&code); err != nil {
+		t.Fatal(err)
+	}
+
 	codestr := code.String()
 
 	if len(prefix) > 0 {
@@ -67,10 +83,33 @@ func FormatTestCode(t *testing.T, code string) string {
 	t.Helper()
 	tmp := CreateTempFile(t, code)
 	defer os.Remove(tmp)
-	require.NoError(t, finalizeGoSource(tmp))
+	if err := finalizeGoSource(tmp); err != nil {
+		t.Fatal(err)
+	}
 	content, err := os.ReadFile(tmp)
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return strings.Join(strings.Split(string(content), "\n")[2:], "\n")
+}
+
+// Diff returns a diff between s1 and s2. It uses the diff tool if installed
+// otherwise degrades to using the dmp package.
+func Diff(t *testing.T, s1, s2 string) string {
+	_, err := exec.LookPath("diff")
+	supportsDiff := (err == nil)
+	if !supportsDiff {
+		dmp := diffmatchpatch.New()
+		diffs := dmp.DiffMain(s1, s2, false)
+		return dmp.DiffPrettyText(diffs)
+	}
+	left := CreateTempFile(t, s1)
+	right := CreateTempFile(t, s2)
+	defer os.Remove(left)
+	defer os.Remove(right)
+	cmd := exec.Command("diff", left, right)
+	diffb, _ := cmd.CombinedOutput()
+	return strings.ReplaceAll(string(diffb), "\t", " ␉ ")
 }
 
 // CreateTempFile creates a temporary file and writes the given content.
@@ -78,12 +117,16 @@ func FormatTestCode(t *testing.T, code string) string {
 func CreateTempFile(t *testing.T, content string) string {
 	t.Helper()
 	f, err := os.CreateTemp("", "")
-	require.NoError(t, err)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = f.WriteString(content)
 	if err != nil {
 		os.Remove(f.Name())
 		t.Fatal(err)
 	}
-	require.NoError(t, f.Close())
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 	return f.Name()
 }
