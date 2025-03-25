@@ -58,15 +58,16 @@ const (
 //
 // Example:
 //
-//	Attribute("string", String, func() {
-//	    Enum("this", "that", "and this")
-//	})
+//    Attribute("string", String, func() {
+//        Enum("this", "that", "and this")
+//    })
 //
-//	Attribute("array", ArrayOf(Int), func() {
-//	    Elem(func() {
-//	        Enum(1, 2, 3, 4, 5)  // Sets possible values for array elements
-//	    })
-//	})
+//    Attribute("array", ArrayOf(Int), func() {
+//        Elem(func() {
+//            Enum(1, 2, 3, 4, 5)  // Sets possible values for array elements
+//        })
+//    })
+//
 func Enum(vals ...any) {
 	if a, ok := eval.Current().(*expr.AttributeExpr); ok {
 		for i, v := range vals {
@@ -143,9 +144,9 @@ func Enum(vals ...any) {
 //
 // Example:
 //
-//	Attribute("created_at", String, func() {
-//	    Format(FormatDateTime)
-//	})
+//    Attribute("created_at", String, func() {
+//        Format(FormatDateTime)
+//    })
 func Format(f expr.ValidationFormat) {
 	if a, ok := eval.Current().(*expr.AttributeExpr); ok {
 		if !a.IsSupportedValidationFormat(f) {
@@ -167,9 +168,10 @@ func Format(f expr.ValidationFormat) {
 //
 // Example:
 //
-//	Attribute("pattern", String, func() {
-//	    Pattern("^[A-Z].*[0-9]$")
-//	})
+//    Attribute("pattern", String, func() {
+//        Pattern("^[A-Z].*[0-9]$")
+//    })
+//
 func Pattern(p string) {
 	if a, ok := eval.Current().(*expr.AttributeExpr); ok {
 		if a.Type != nil && a.Type.Kind() != expr.StringKind {
@@ -193,9 +195,10 @@ func Pattern(p string) {
 //
 // Example:
 //
-//	Attribute("float", float32, func() {
-//	    ExclusiveMinimum(100)
-//	})
+//    Attribute("float", float32, func() {
+//        ExclusiveMinimum(100)
+//    })
+//
 func ExclusiveMinimum(val any) {
 	if a, ok := eval.Current().(*expr.AttributeExpr); ok {
 		if a.Type != nil &&
@@ -234,9 +237,10 @@ func ExclusiveMinimum(val any) {
 //
 // Example:
 //
-//	Attribute("integer", Int, func() {
-//	    Minimum(100)
-//	})
+//    Attribute("integer", Int, func() {
+//        Minimum(100)
+//    })
+//
 func Minimum(val any) {
 	if a, ok := eval.Current().(*expr.AttributeExpr); ok {
 		if a.Type != nil &&
@@ -275,9 +279,10 @@ func Minimum(val any) {
 //
 // Example:
 //
-//	Attribute("float", float32, func() {
-//	    ExclusiveMaximum(100)
-//	})
+//    Attribute("float", float32, func() {
+//        ExclusiveMaximum(100)
+//    })
+//
 func ExclusiveMaximum(val any) {
 	if a, ok := eval.Current().(*expr.AttributeExpr); ok {
 		if a.Type != nil &&
@@ -316,9 +321,10 @@ func ExclusiveMaximum(val any) {
 //
 // Example:
 //
-//	Attribute("integer", Int, func() {
-//	    Maximum(100)
-//	})
+//    Attribute("integer", Int, func() {
+//        Maximum(100)
+//    })
+//
 func Maximum(val any) {
 	if a, ok := eval.Current().(*expr.AttributeExpr); ok {
 		if a.Type != nil &&
@@ -357,15 +363,16 @@ func Maximum(val any) {
 //
 // Example:
 //
-//	Attribute("map", MapOf(String, String), func() {
-//	    MinLength(10)      // min key-values in map
-//	    Key(func() {
-//	        MinLength(1)   // min length of map key
-//	    })
-//	    Elem(func() {
-//	        MinLength(5)   // min length of map elements
-//	    })
-//	})
+//    Attribute("map", MapOf(String, String), func() {
+//        MinLength(10)      // min key-values in map
+//        Key(func() {
+//            MinLength(1)   // min length of map key
+//        })
+//        Elem(func() {
+//            MinLength(5)   // min length of map elements
+//        })
+//    })
+//
 func MinLength(val int) {
 	if a, ok := eval.Current().(*expr.AttributeExpr); ok {
 		if a.Type != nil {
@@ -391,12 +398,13 @@ func MinLength(val int) {
 //
 // Example:
 //
-//	Attribute("array", ArrayOf(String), func() {
-//	    MaxLength(200)    // max array length
-//	    Elem(func() {
-//	        MaxLength(5)  // max length of each array element
-//	    })
-//	})
+//    Attribute("array", ArrayOf(String), func() {
+//        MaxLength(200)    // max array length
+//        Elem(func() {
+//            MaxLength(5)  // max length of each array element
+//        })
+//    })
+//
 func MaxLength(val int) {
 	if a, ok := eval.Current().(*expr.AttributeExpr); ok {
 		if a.Type != nil {
@@ -422,11 +430,12 @@ func MaxLength(val int) {
 //
 // Example:
 //
-//	var _ = Type("MyType", func() {
-//	    Attribute("string", String)
-//	    Attribute("int", Integer)
-//	    Required("string", "int")
-//	})
+//    var _ = Type("MyType", func() {
+//        Attribute("string", String)
+//        Attribute("int", Integer)
+//        Required("string", "int")
+//    })
+//
 func Required(names ...string) {
 	var at *expr.AttributeExpr
 

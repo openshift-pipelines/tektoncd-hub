@@ -34,25 +34,25 @@ import (
 // Attribute accepts one to four arguments, the valid usages of the function
 // are:
 //
-//	Attribute(name)       // Attribute of type String with no description, no
-//	                      // validation, default or example value
+//    Attribute(name)       // Attribute of type String with no description, no
+//                          // validation, default or example value
 //
-//	Attribute(name, fn)   // Attribute of type object with inline field
-//	                      // definitions, description, validations, default
-//	                      // and/or example value
+//    Attribute(name, fn)   // Attribute of type object with inline field
+//                          // definitions, description, validations, default
+//                          // and/or example value
 //
-//	Attribute(name, type) // Attribute with no description, no validation,
-//	                      // no default or example value
+//    Attribute(name, type) // Attribute with no description, no validation,
+//                          // no default or example value
 //
-//	Attribute(name, type, fn) // Attribute with description, validations,
-//	                          // default and/or example value
+//    Attribute(name, type, fn) // Attribute with description, validations,
+//                              // default and/or example value
 //
-//	Attribute(name, type, description)     // Attribute with no validation,
-//	                                       // default or example value
+//    Attribute(name, type, description)     // Attribute with no validation,
+//                                           // default or example value
 //
-//	Attribute(name, type, description, fn) // Attribute with description,
-//	                                       // validations, default and/or
-//	                                       // example value
+//    Attribute(name, type, description, fn) // Attribute with description,
+//                                           // validations, default and/or
+//                                           // example value
 //
 // Where name is a string indicating the name of the attribute, type specifies
 // the attribute type (see above for the possible values), description a string
@@ -65,73 +65,76 @@ import (
 //
 // Examples:
 //
-//	Attribute("name")
+//    Attribute("name")
 //
-//	Attribute("driver", Person)         // Use type defined with Type function
+//    Attribute("driver", Person)         // Use type defined with Type function
 //
-//	Attribute("driver", "Person")       // May also use the type name
+//    Attribute("driver", "Person")       // May also use the type name
 //
-//	Attribute("name", String, func() {
-//	    Pattern("^foo")                 // Adds a validation rule
-//	})
+//    Attribute("name", String, func() {
+//        Pattern("^foo")                 // Adds a validation rule
+//    })
 //
-//	Attribute("driver", Person, func() {
-//	    Required("name")                // Add required field to list of
-//	})                                  // fields already required in Person
+//    Attribute("driver", Person, func() {
+//        Required("name")                // Add required field to list of
+//    })                                  // fields already required in Person
 //
-//	Attribute("name", String, func() {
-//	    Default("bob")                  // Sets a default value
-//	})
+//    Attribute("name", String, func() {
+//        Default("bob")                  // Sets a default value
+//    })
 //
-//	Attribute("name", String, "name of driver") // Sets a description
+//    Attribute("name", String, "name of driver") // Sets a description
 //
-//	Attribute("age", Int32, "description", func() {
-//	    Minimum(2)                       // Sets both a description and
-//	                                     // validations
-//	})
+//    Attribute("age", Int32, "description", func() {
+//        Minimum(2)                       // Sets both a description and
+//                                         // validations
+//    })
 //
 // The definition below defines an attribute inline. The resulting type
 // is an object with three attributes "name", "age" and "child". The "child"
 // attribute is itself defined inline and has one child attribute "name".
 //
-//	Attribute("driver", func() {           // Define type inline
-//	    Description("Composite attribute") // Set description
+//    Attribute("driver", func() {           // Define type inline
+//        Description("Composite attribute") // Set description
 //
-//	    Attribute("name", String)          // Child attribute
-//	    Attribute("age", Int32, func() {   // Another child attribute
-//	        Description("Age of driver")
-//	        Default(42)
-//	        Minimum(2)
-//	    })
-//	    Attribute("child", func() {        // Defines a child attribute
-//	        Attribute("name", String)      // Grand-child attribute
-//	        Required("name")
-//	    })
+//        Attribute("name", String)          // Child attribute
+//        Attribute("age", Int32, func() {   // Another child attribute
+//            Description("Age of driver")
+//            Default(42)
+//            Minimum(2)
+//        })
+//        Attribute("child", func() {        // Defines a child attribute
+//            Attribute("name", String)      // Grand-child attribute
+//            Required("name")
+//        })
 //
-//	    Required("name", "age")            // List required attributes
-//	})
+//        Required("name", "age")            // List required attributes
+//    })
+//
 func Attribute(name string, args ...any) {
 	var parent *expr.AttributeExpr
-	switch def := eval.Current().(type) {
-	case *expr.AttributeExpr:
-		parent = def
-	case expr.CompositeExpr:
-		parent = def.Attribute()
-	default:
-		eval.IncompatibleDSL()
-		return
-	}
-	if parent == nil {
-		eval.ReportError("invalid syntax, attribute %#v has no parent", name)
-		return
-	}
-	if parent.Type == nil {
-		parent.Type = &expr.Object{}
-	}
-	if _, ok := parent.Type.(*expr.Object); !ok {
-		if _, ok := parent.Type.(*expr.Union); !ok {
-			eval.ReportError("can't define child attribute %#v on attribute of type %s %T", name, parent.Type.Name(), parent.Type)
+	{
+		switch def := eval.Current().(type) {
+		case *expr.AttributeExpr:
+			parent = def
+		case expr.CompositeExpr:
+			parent = def.Attribute()
+		default:
+			eval.IncompatibleDSL()
 			return
+		}
+		if parent == nil {
+			eval.ReportError("invalid syntax, attribute %#v has no parent", name)
+			return
+		}
+		if parent.Type == nil {
+			parent.Type = &expr.Object{}
+		}
+		if _, ok := parent.Type.(*expr.Object); !ok {
+			if _, ok := parent.Type.(*expr.Union); !ok {
+				eval.ReportError("can't define child attribute %#v on attribute of type %s %T", name, parent.Type.Name(), parent.Type)
+				return
+			}
 		}
 	}
 
@@ -187,9 +190,10 @@ func Attribute(name string, args ...any) {
 //
 // Example:
 //
-//	Field(1, "ID", String, func() {
-//	    Pattern("[0-9]+")
-//	})
+//     Field(1, "ID", String, func() {
+//         Pattern("[0-9]+")
+//     })
+//
 func Field(tag any, name string, args ...any) {
 	fn := func() { Meta("rpc:tag", fmt.Sprintf("%v", tag)) }
 	if len(args) > 0 {
@@ -211,21 +215,17 @@ func Field(tag any, name string, args ...any) {
 //
 // Example:
 //
-//	var PetOwner = Type("PetOwner", func() {
-//	    Name("name", String)
-//	    OneOf("pet", "Owner's pet", func() {
-//	        Attribute("cat", Cat, "Cats are cool")
-//	        Attribute("dog", Dog, "Dogs are cool too")
-//	    })
-//	})
+//    var PetOwner = Type("PetOwner", func() {
+//        Name("name", String)
+//        OneOf("pet", "Owner's pet", func() {
+//            Attribute("cat", Cat, "Cats are cool")
+//            Attribute("dog", Dog, "Dogs are cool too")
+//        })
+//    })
+//
 func OneOf(name string, args ...any) {
-	if len(args) == 0 {
-		eval.TooFewArgError()
-		return
-	}
 	if len(args) > 2 {
-		eval.TooManyArgError()
-		return
+		eval.ReportError("OneOf: wrong number of arguments")
 	}
 	fn, ok := args[len(args)-1].(func())
 	if !ok {
@@ -280,31 +280,32 @@ func Default(def any) {
 //
 // Examples:
 //
-//	Params(func() {
-//	    Param("ZipCode:zip-code", String, "Zip code filter", func() {
-//	        Example("Santa Barbara", "93111")
-//	        Example("93117") // same as Example("default", "93117")
-//	    })
-//	})
+//    Params(func() {
+//        Param("ZipCode:zip-code", String, "Zip code filter", func() {
+//            Example("Santa Barbara", "93111")
+//            Example("93117") // same as Example("default", "93117")
+//        })
+//    })
 //
-//	Attributes(func() {
-//	    Attribute("ID", Int64, "ID is the unique bottle identifier")
-//	    Example("The first bottle", func() {
-//	        Description("This bottle has an ID set to 1")
-//	        Value(Val{"ID": 1})
-//	    })
-//	    Example("Another bottle", func() {
-//	        Description("This bottle has an ID set to 5")
-//	        Value(Val{"ID": 5})
-//	    })
-//	})
+//    Attributes(func() {
+//        Attribute("ID", Int64, "ID is the unique bottle identifier")
+//        Example("The first bottle", func() {
+//            Description("This bottle has an ID set to 1")
+//            Value(Val{"ID": 1})
+//        })
+//        Example("Another bottle", func() {
+//            Description("This bottle has an ID set to 5")
+//            Value(Val{"ID": 5})
+//        })
+//    })
+//
 func Example(args ...any) {
 	if len(args) == 0 {
-		eval.TooFewArgError()
+		eval.ReportError("not enough arguments")
 		return
 	}
 	if len(args) > 2 {
-		eval.TooManyArgError()
+		eval.ReportError("too many arguments")
 		return
 	}
 	var (
@@ -318,7 +319,7 @@ func Example(args ...any) {
 		var ok bool
 		summary, ok = args[0].(string)
 		if !ok {
-			eval.InvalidArgError("summary (string)", args[0])
+			eval.InvalidArgError("summary (string)", summary)
 			return
 		}
 		arg = args[1]
@@ -403,7 +404,7 @@ func parseAttributeArgs(baseAttr *expr.AttributeExpr, args ...any) (expr.DataTyp
 		parseDescription("string", 1)
 		parseDSL(2, success, func() { eval.InvalidArgError("func()", args[2]) })
 	default:
-		eval.TooManyArgError()
+		eval.ReportError("too many arguments in call to Attribute")
 	}
 
 	return dataType, description, fn

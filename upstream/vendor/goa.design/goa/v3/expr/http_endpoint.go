@@ -131,9 +131,6 @@ func (e *HTTPEndpointExpr) PathParams() *MappedAttributeExpr {
 	for _, r := range e.Routes {
 		for _, p := range r.Params() {
 			att := pat.Find(p)
-			if att == nil {
-				continue
-			}
 			obj.Set(p, att)
 			if e.Params.IsRequired(p) {
 				v.AddRequired(p)

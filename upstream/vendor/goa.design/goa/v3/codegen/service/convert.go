@@ -260,7 +260,7 @@ func ConvertFile(root *expr.RootExpr, service *expr.ServiceExpr) (*codegen.File,
 		}
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "convert-to",
-			Source: readTemplate("convert"),
+			Source: convertT,
 			Data:   data,
 		})
 	}
@@ -298,7 +298,7 @@ func ConvertFile(root *expr.RootExpr, service *expr.ServiceExpr) (*codegen.File,
 		}
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "create-from",
-			Source: readTemplate("create"),
+			Source: createT,
 			Data:   data,
 		})
 	}
@@ -312,7 +312,7 @@ func ConvertFile(root *expr.RootExpr, service *expr.ServiceExpr) (*codegen.File,
 		seen[tf.Name] = struct{}{}
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "convert-create-helper",
-			Source: readTemplate("transform_helper"),
+			Source: transformHelperT,
 			Data:   tf,
 		})
 	}
@@ -355,7 +355,7 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 	// check compatibility
 	if ref != nil {
 		if err := compatible(ref, t); err != nil {
-			return fmt.Errorf("%q: %w", t.Name(), err)
+			return fmt.Errorf("%q: %s", t.Name(), err)
 		}
 	}
 
@@ -415,7 +415,7 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 		}
 		var elem expr.DataType
 		if err := buildDesignType(&elem, e, eref, appendPath(rec, "[0]")); err != nil {
-			return fmt.Errorf("%w", err)
+			return fmt.Errorf("%s", err)
 		}
 		*dt = &expr.Array{ElemType: &expr.AttributeExpr{Type: elem}}
 
@@ -428,11 +428,11 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 		}
 		var kt expr.DataType
 		if err := buildDesignType(&kt, t.Key(), kref, appendPath(rec, ".key")); err != nil {
-			return fmt.Errorf("%w", err)
+			return fmt.Errorf("%s", err)
 		}
 		var vt expr.DataType
 		if err := buildDesignType(&vt, t.Elem(), vref, appendPath(rec, ".value")); err != nil {
-			return fmt.Errorf("%w", err)
+			return fmt.Errorf("%s", err)
 		}
 		*dt = &expr.Map{KeyType: &expr.AttributeExpr{Type: kt}, ElemType: &expr.AttributeExpr{Type: vt}}
 
@@ -486,7 +486,7 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 			var fdt expr.DataType
 			if f.Type.Kind() == reflect.Ptr {
 				if err := buildDesignType(&fdt, f.Type.Elem(), aref, recf); err != nil {
-					return fmt.Errorf("%q.%s: %w", t.Name(), f.Name, err)
+					return fmt.Errorf("%q.%s: %s", t.Name(), f.Name, err)
 				}
 				if expr.IsArray(fdt) {
 					return fmt.Errorf("%s: field of type pointer to slice are not supported, use slice instead", rec.path)
@@ -501,7 +501,7 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 					required = append(required, atn)
 				}
 				if err := buildDesignType(&fdt, f.Type, aref, appendPath(rec, "."+f.Name)); err != nil {
-					return fmt.Errorf("%q.%s: %w", t.Name(), f.Name, err)
+					return fmt.Errorf("%q.%s: %s", t.Name(), f.Name, err)
 				}
 			}
 			name := atn
@@ -743,3 +743,27 @@ func compatible(from expr.DataType, to reflect.Type, recs ...compRec) error {
 
 	return fmt.Errorf("types don't match: type of %s is %s but type of corresponding attribute is %s", rec.path, toName, from.Name())
 }
+
+// input: convertData
+const convertT = `{{ printf "%s creates an instance of %s initialized from t." .Name .TypeName | comment }}
+func (t {{ .ReceiverTypeRef }}) {{ .Name }}() {{ .TypeRef }} {
+    {{ .Code }}
+    return v
+}
+`
+
+// input: convertData
+const createT = `{{ printf "%s initializes t from the fields of v" .Name | comment }}
+func (t {{ .ReceiverTypeRef }}) {{ .Name }}(v {{ .TypeRef }}) {
+	{{ .Code }}
+	*t = *temp
+}
+`
+
+// input: TransformFunctionData
+const transformHelperT = `{{ printf "%s builds a value of type %s from a value of type %s." .Name .ResultTypeRef .ParamTypeRef | comment }}
+func {{ .Name }}(v {{ .ParamTypeRef }}) {{ .ResultTypeRef }} {
+        {{ .Code }}
+        return res
+}
+`

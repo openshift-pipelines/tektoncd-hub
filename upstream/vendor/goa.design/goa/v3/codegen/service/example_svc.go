@@ -68,28 +68,21 @@ func exampleServiceFile(genpkg string, _ *expr.RootExpr, svc *expr.ServiceExpr, 
 	specs := []*codegen.ImportSpec{
 		{Path: "io"},
 		{Path: "context"},
+		{Path: "log"},
 		{Path: "fmt"},
 		{Path: "strings"},
 		{Path: path.Join(genpkg, svcName), Name: data.PkgName},
-		{Path: "goa.design/clue/log"},
 		{Path: "goa.design/goa/v3/security"},
 	}
 	sections := []*codegen.SectionTemplate{
 		codegen.Header("", apipkg, specs),
-		{
-			Name:   "basic-service-struct",
-			Source: readTemplate("service_struct"),
-			Data:   data,
-		}, {
-			Name:   "basic-service-init",
-			Source: readTemplate("service_init"),
-			Data:   data,
-		},
+		{Name: "basic-service-struct", Source: svcStructT, Data: data},
+		{Name: "basic-service-init", Source: svcInitT, Data: data},
 	}
 	if len(data.Schemes) > 0 {
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "security-authfuncs",
-			Source: readTemplate("security_authfuncs"),
+			Source: dummyAuthFuncsT,
 			Data:   data,
 		})
 	}
@@ -120,9 +113,9 @@ func basicEndpointSection(m *expr.MethodExpr, svcData *Data) *codegen.SectionTem
 		ed.ResultFullRef = svcData.Scope.GoFullTypeRef(m.Result, svcData.PkgName)
 		ed.ResultIsStruct = expr.IsObject(m.Result.Type)
 		if md.ViewedResult != nil {
-			view := expr.DefaultView
-			if v, ok := m.Result.Meta.Last(expr.ViewMetaKey); ok {
-				view = v
+			view := "default"
+			if v, ok := m.Result.Meta["view"]; ok {
+				view = v[0]
 			}
 			ed.ResultView = view
 		}
@@ -132,7 +125,55 @@ func basicEndpointSection(m *expr.MethodExpr, svcData *Data) *codegen.SectionTem
 	}
 	return &codegen.SectionTemplate{
 		Name:   "basic-endpoint",
-		Source: readTemplate("endpoint"),
+		Source: endpointT,
 		Data:   ed,
 	}
 }
+
+const (
+	// input: service.Data
+	svcStructT = `{{ printf "%s service example implementation.\nThe example methods log the requests and return zero values." .Name | comment }}
+type {{ .VarName }}srvc struct {
+	logger *log.Logger
+}
+`
+
+	// input: service.Data
+	svcInitT = `{{ printf "New%s returns the %s service implementation." .StructName .Name | comment }}
+func New{{ .StructName }}(logger *log.Logger) {{ .PkgName }}.Service {
+	return &{{ .VarName }}srvc{logger}
+}
+`
+
+	// input: basicEndpointData
+	endpointT = `{{ comment .Description }}
+{{- if .ServerStream }}
+func (s *{{ .ServiceVarName }}srvc) {{ .VarName }}(ctx context.Context{{ if .PayloadFullRef }}, p {{ .PayloadFullRef }}{{ end }}, stream {{ .StreamInterface }}) (err error) {
+{{- else }}
+func (s *{{ .ServiceVarName }}srvc) {{ .VarName }}(ctx context.Context{{ if .PayloadFullRef }}, p {{ .PayloadFullRef }}{{ end }}{{ if .SkipRequestBodyEncodeDecode }}, req io.ReadCloser{{ end }}) ({{ if .ResultFullRef }}res {{ .ResultFullRef }}, {{ end }}{{ if .SkipResponseBodyEncodeDecode }}resp io.ReadCloser, {{ end }}{{ if .ViewedResult }}{{ if not .ViewedResult.ViewName }}view string, {{ end }}{{ end }}err error) {
+{{- end }}
+{{- if .SkipRequestBodyEncodeDecode }}
+	// req is the HTTP request body stream.
+	defer req.Close()
+{{- end }}
+{{- if and (and .ResultFullRef .ResultIsStruct) (not .ServerStream) }}
+	res = &{{ .ResultFullName }}{}
+{{- end }}
+{{- if .SkipResponseBodyEncodeDecode }}
+	// resp is the HTTP response body stream.
+	resp = io.NopCloser(strings.NewReader("{{ .Name }}"))
+{{- end }}
+{{- if .ViewedResult }}
+	{{- if not .ViewedResult.ViewName }}
+		{{- if .ServerStream }}
+			stream.SetView({{ printf "%q" .ResultView }})
+		{{- else }}
+			view = {{ printf "%q" .ResultView }}
+		{{- end }}
+	{{- end }}
+{{- end }}
+	s.logger.Print("{{ .ServiceVarName }}.{{ .Name }}")
+	return
+}
+`
+)
