@@ -1,12 +1,11 @@
 package eval
 
 import (
-	"errors"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
-	"unicode"
 )
 
 // RunDSL iterates through the root expressions and calls WalkSets on each to
@@ -72,14 +71,14 @@ func Execute(fn func(), def Expression) bool {
 	}
 	var startCount int
 	if Context.Errors != nil {
-		startCount = len(Context.Errors)
+		startCount = len(Context.Errors.(MultiError))
 	}
 	Context.Stack = append(Context.Stack, def)
 	fn()
 	Context.Stack = Context.Stack[:len(Context.Stack)-1]
 	var endCount int
 	if Context.Errors != nil {
-		endCount = len(Context.Errors)
+		endCount = len(Context.Errors.(MultiError))
 	}
 	return endCount <= startCount
 }
@@ -117,25 +116,14 @@ func ReportError(fm string, vals ...any) {
 // IncompatibleDSL should be called by DSL functions when they are invoked in an
 // incorrect context (e.g. "Params" in "Service").
 func IncompatibleDSL() {
-	ReportError("invalid use of %s", caller())
+	elems := strings.Split(caller(), ".")
+	ReportError("invalid use of %s", elems[len(elems)-1])
 }
 
 // InvalidArgError records an invalid argument error. It is used by DSL
 // functions that take dynamic arguments.
 func InvalidArgError(expected string, actual any) {
 	ReportError("cannot use %#v (type %s) as type %s", actual, reflect.TypeOf(actual), expected)
-}
-
-// TooFewArgError records a too few arguments error. It is used by DSL
-// functions that take dynamic arguments.
-func TooFewArgError() {
-	ReportError("too few arguments given to %s", caller())
-}
-
-// TooManyArgError records a too many arguments error. It is used by DSL
-// functions that take dynamic arguments.
-func TooManyArgError() {
-	ReportError("too many arguments given to %s", caller())
 }
 
 // ValidationErrors records the errors encountered when running Validate.
@@ -170,8 +158,7 @@ func (verr *ValidationErrors) Add(def Expression, format string, vals ...any) {
 // AddError adds a validation error to the target. It "flattens" validation
 // errors so that the recorded errors are never ValidationErrors themselves.
 func (verr *ValidationErrors) AddError(def Expression, err error) {
-	var v *ValidationErrors
-	if errors.As(err, &v) {
+	if v, ok := err.(*ValidationErrors); ok {
 		verr.Errors = append(verr.Errors, v.Errors...)
 		verr.Expressions = append(verr.Expressions, v.Expressions...)
 		return
@@ -248,26 +235,13 @@ func finalizeSet(set ExpressionSet) {
 
 // caller returns the name of calling function.
 func caller() string {
-	var latest string
-	for skip := 2; skip <= 5; skip++ {
-		pc, _, _, ok := runtime.Caller(skip)
-		if !ok {
-			break
-		}
-		name := runtime.FuncForPC(pc).Name()
-		if !strings.HasPrefix(name, "goa.design/goa/v3/dsl.") {
-			break
-		}
-		caller := strings.Split(strings.TrimPrefix(name, "goa.design/goa/v3/dsl."), ".")[0]
-		for _, first := range caller {
-			if unicode.IsUpper(first) {
-				latest = caller
-			}
-			break
-		}
+	pc, file, _, ok := runtime.Caller(2)
+	if ok && filepath.Base(file) == "current.go" {
+		pc, _, _, ok = runtime.Caller(3)
 	}
-	if latest != "" {
-		return latest
+	if !ok {
+		return "<unknown>"
 	}
-	return "<unknown>"
+
+	return runtime.FuncForPC(pc).Name()
 }

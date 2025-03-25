@@ -1,7 +1,6 @@
 package expr
 
 import (
-	"errors"
 	"fmt"
 
 	"goa.design/goa/v3/eval"
@@ -81,8 +80,7 @@ func (s *ServiceExpr) Validate() error {
 	verr := new(eval.ValidationErrors)
 	for _, e := range s.Errors {
 		if err := e.Validate(); err != nil {
-			var verrs *eval.ValidationErrors
-			if errors.As(err, &verrs) {
+			if verrs, ok := err.(*eval.ValidationErrors); ok {
 				verr.Merge(verrs)
 			}
 		}

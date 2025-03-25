@@ -487,12 +487,8 @@ func (ServicesData) analyze(gs *expr.GRPCServiceExpr) *ServiceData {
 			}
 			// lookup message in sd.Messages
 			if ut, ok := att.Type.(expr.UserType); ok {
-				name := ut.Name()
-				if n := att.Meta["struct:name:proto"]; n != nil {
-					name = n[0]
-				}
 				for _, t := range sd.Messages {
-					if t.Name == name {
+					if t.Name == ut.Name() {
 						return t
 					}
 				}
@@ -682,23 +678,19 @@ func collectMessages(at *expr.AttributeExpr, sd *ServiceData, seen map[string]st
 	}
 	switch dt := at.Type.(type) {
 	case expr.UserType:
-		name := dt.Name()
-		if n := at.Meta["struct:name:proto"]; n != nil {
-			name = n[0]
-		}
-		if _, ok := seen[name]; ok {
+		if _, ok := seen[dt.Name()]; ok {
 			return
 		}
 		att := userTypeAttribute(dt)
 		data = append(data, &service.UserTypeData{
-			Name:        name,
+			Name:        dt.Name(),
 			VarName:     protoBufMessageName(at, sd.Scope),
 			Description: dt.Attribute().Description,
 			Def:         protoBufMessageDef(att, sd),
 			Ref:         protoBufGoFullTypeRef(at, sd.PkgName, sd.Scope),
 			Type:        dt,
 		})
-		seen[name] = struct{}{}
+		seen[dt.Name()] = struct{}{}
 		d, i := collect(att)
 		data, imports = append(data, d...), append(imports, i...)
 	case *expr.Object:
@@ -753,7 +745,7 @@ func addValidation(att *expr.AttributeExpr, attName string, sd *ServiceData, req
 	}
 	vtx := protoBufTypeContext(sd.PkgName, sd.Scope, false)
 	removeMeta(att)
-	if def := codegen.ValidationCode(att, ut, vtx, true, expr.IsAlias(att.Type), false, attName); def != "" {
+	if def := codegen.ValidationCode(att, ut, vtx, true, expr.IsAlias(att.Type), attName); def != "" {
 		v := &ValidationData{
 			Name:    "Validate" + name,
 			Def:     def,
@@ -1377,3 +1369,118 @@ func isEmpty(dt expr.DataType) bool {
 	}
 	return false
 }
+
+// input: InitData
+const typeInitT = `{{ comment .Description }}
+func {{ .Name }}({{ range .Args }}{{ .Name }} {{ .TypeRef }}, {{ end }}) {{ .ReturnTypeRef }} {
+	{{ .Code }}
+{{- if .ReturnIsStruct }}
+	{{- range .Args }}
+		{{- if .FieldName }}
+			{{ $.ReturnVarName }}.{{ .FieldName }} = {{ if isAlias .FieldType }}{{ fullName .FieldType }}({{ end }}{{ .Name }}{{ if isAlias .FieldType }}){{ end }}
+		{{- end }}
+	{{- end }}
+{{- end }}
+	return {{ .ReturnVarName }}
+}
+`
+
+// input: ValidationData
+const validateT = `{{ printf "%s runs the validations defined on %s." .Name .SrcName | comment }}
+func {{ .Name }}({{ .ArgName }} {{ .SrcRef }}) (err error) {
+	{{ .Def }}
+	return
+}
+`
+
+// streamStructTypeT renders the server and client struct types that
+// implements the client and server service stream interfaces.
+// input: StreamData
+const streamStructTypeT = `{{ printf "%s implements the %s interface." .VarName .ServiceInterface | comment }}
+type {{ .VarName }} struct {
+	stream {{ .Interface }}
+{{- if .Endpoint.Method.ViewedResult }}
+	view string
+{{- end }}
+}
+`
+
+// streamSendT renders the function implementing the Send method in
+// stream interface.
+// input: StreamData
+const streamSendT = `{{ comment .SendDesc }}
+func (s *{{ .VarName }}) {{ .SendName }}(res {{ .SendRef }}) error {
+{{- if and .Endpoint.Method.ViewedResult (eq .Type "server") }}
+	{{- if .Endpoint.Method.ViewedResult.ViewName }}
+		vres := {{ .Endpoint.ServicePkgName }}.{{ .Endpoint.Method.ViewedResult.Init.Name }}(res, {{ printf "%q" .Endpoint.Method.ViewedResult.ViewName }})
+	{{- else }}
+		vres := {{ .Endpoint.ServicePkgName }}.{{ .Endpoint.Method.ViewedResult.Init.Name }}(res, s.view)
+	{{- end }}
+{{- end }}
+	v := {{ .SendConvert.Init.Name }}({{ if and .Endpoint.Method.ViewedResult (eq .Type "server") }}vres.Projected{{ else }}res{{ end }})
+	return s.stream.{{ .SendName }}(v)
+}
+`
+
+// streamRecvT renders the function implementing the Recv method in
+// stream interface.
+// input: StreamData
+const streamRecvT = `{{ comment .RecvDesc }}
+func (s *{{ .VarName }}) {{ .RecvName }}() ({{ .RecvRef }}, error) {
+	var res {{ .RecvRef }}
+	v, err := s.stream.{{ .RecvName }}()
+	if err != nil {
+		return res, err
+	}
+{{- if and .Endpoint.Method.ViewedResult (eq .Type "client") }}
+	proj := {{ .RecvConvert.Init.Name }}({{ range .RecvConvert.Init.Args }}{{ .Name }}, {{ end }})
+	vres := {{ if not .Endpoint.Method.ViewedResult.IsCollection }}&{{ end }}{{ .Endpoint.Method.ViewedResult.FullName }}{Projected: proj, View: {{ if .Endpoint.Method.ViewedResult.ViewName }}"{{ .Endpoint.Method.ViewedResult.ViewName }}"{{ else }}s.view{{ end }} }
+	if err := {{ .Endpoint.Method.ViewedResult.ViewsPkg }}.Validate{{ .Endpoint.Method.Result }}(vres); err != nil {
+	  return nil, err
+	}
+	return {{ .Endpoint.ServicePkgName }}.{{ .Endpoint.Method.ViewedResult.ResultInit.Name }}(vres), nil
+{{- else }}
+{{- if .RecvConvert.Validation }}
+	if err = {{ .RecvConvert.Validation.Name }}(v); err != nil {
+		return res, err
+	}
+{{- end }}
+	return {{ .RecvConvert.Init.Name }}({{ range .RecvConvert.Init.Args }}{{ .Name }}, {{ end }}), nil
+{{- end }}
+}
+`
+
+// streamCloseT renders the function implementing the Close method in
+// stream interface.
+// input: StreamData
+const streamCloseT = `
+func (s *{{ .VarName }}) Close() error {
+{{- if eq .Type "client" }}
+{{- if .Endpoint.Method.Result }}
+	{{ comment "Close the send direction of the stream" }}
+	return s.stream.CloseSend()
+{{- else }}
+	{{ comment "synchronize and report any server error" }}
+	_, err := s.stream.CloseAndRecv()
+	return err
+{{- end }}
+{{- else }}
+{{- if .Endpoint.Method.Result }}
+	{{ comment "nothing to do here" }}
+	return nil
+{{- else }}
+	{{ comment "synchronize stream" }}
+	return s.stream.SendAndClose(&{{ .Endpoint.Response.ServerConvert.TgtName }}{})
+{{- end }}
+{{- end }}
+}
+`
+
+// streamSetViewT renders the function implementing the SetView method in
+// server stream interface.
+// input: StreamData
+const streamSetViewT = `{{ printf "SetView sets the view." | comment }}
+func (s *{{ .VarName }}) SetView(view string) {
+	s.view = view
+}
+`

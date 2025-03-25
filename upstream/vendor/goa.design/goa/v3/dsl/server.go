@@ -24,48 +24,48 @@ import (
 //
 // Example:
 //
-//	 var _ = API("calc", func() {
-//	     Server("calcsvr", func() {
-//	         Description("calcsvr hosts the Calculator Service.")
+//    var _ = API("calc", func() {
+//        Server("calcsvr", func() {
+//            Description("calcsvr hosts the Calculator Service.")
 //
-//	         // List the services hosted by this server.
-//	         Services("calc")
+//            // List the services hosted by this server.
+//            Services("calc")
 //
-//	         // List the Hosts and their transport URLs.
-//	         Host("production", func() {
-//	            Description("Production host.")
-//	            // URIs can be parameterized using {param} notation.
-//	            URI("https://{version}.goa.design/calc")
-//	            URI("grpcs://{version}.goa.design")
+//            // List the Hosts and their transport URLs.
+//            Host("production", func() {
+//               Description("Production host.")
+//               // URIs can be parameterized using {param} notation.
+//               URI("https://{version}.goa.design/calc")
+//               URI("grpcs://{version}.goa.design")
 //
-//	            // Variable describes a URI variable.
-//	            Variable("version", String, "API version", func() {
-//	                // URI parameters must have a default value and/or an
-//	                // enum validation.
-//	                Default("v1")
-//	            })
-//	        })
+//               // Variable describes a URI variable.
+//               Variable("version", String, "API version", func() {
+//                   // URI parameters must have a default value and/or an
+//                   // enum validation.
+//                   Default("v1")
+//               })
+//           })
 //
-//	        Host("development", func() {
-//	            Description("Development hosts.")
-//	            // Transport specific URLs, supported schemes are:
-//	            // 'http', 'https', 'grpc' and 'grpcs' with the respective default
-//	            // ports: 80, 443, 8080, 8443.
-//	            URI("http://localhost:80/calc")
-//	            URI("grpc://localhost:8080")
-//	        })
-//	    })
-//	})
+//           Host("development", func() {
+//               Description("Development hosts.")
+//               // Transport specific URLs, supported schemes are:
+//               // 'http', 'https', 'grpc' and 'grpcs' with the respective default
+//               // ports: 80, 443, 8080, 8443.
+//               URI("http://localhost:80/calc")
+//               URI("grpc://localhost:8080")
+//           })
+//       })
+//   })
+//
 func Server(name string, fn ...func()) *expr.ServerExpr {
-	server := &expr.ServerExpr{Name: name}
 	if len(fn) > 1 {
-		eval.TooManyArgError()
-		return server
+		eval.ReportError("too many arguments given to Server")
 	}
 	api, ok := eval.Current().(*expr.APIExpr)
 	if !ok {
 		eval.IncompatibleDSL()
 	}
+	server := &expr.ServerExpr{Name: name}
 	if len(fn) > 0 {
 		eval.Execute(fn[0], server)
 	}
@@ -82,10 +82,11 @@ func Server(name string, fn ...func()) *expr.ServerExpr {
 //
 // Example:
 //
-//	var _ = Server("calcsvr", func() {
-//	    Services("calc", "adder")
-//	    Services("other") // Multiple calls to Services are OK
-//	})
+//    var _ = Server("calcsvr", func() {
+//        Services("calc", "adder")
+//        Services("other") // Multiple calls to Services are OK
+//    })
+//
 func Services(svcs ...string) {
 	s, ok := eval.Current().(*expr.ServerExpr)
 	if !ok {
@@ -108,12 +109,13 @@ func Services(svcs ...string) {
 //
 // Example:
 //
-//	Server("calcsvc", func() {
-//	    Host("development", func() {
-//	        URI("http://localhost:80/calc")
-//	        URI("grpc://localhost:8080")
-//	    })
-//	})
+//    Server("calcsvc", func() {
+//        Host("development", func() {
+//            URI("http://localhost:80/calc")
+//            URI("grpc://localhost:8080")
+//        })
+//    })
+//
 func Host(name string, fn func()) {
 	s, ok := eval.Current().(*expr.ServerExpr)
 	if !ok {
@@ -147,12 +149,13 @@ func Host(name string, fn func()) {
 //
 // Example:
 //
-//	var _ = Server("calcsvc", func() {
-//	    Host("development", func() {
-//	        URI("http://localhost:80/{version}/calc")
-//	        URI("grpc://localhost:8080")
-//	    })
-//	})
+//    var _ = Server("calcsvc", func() {
+//        Host("development", func() {
+//            URI("http://localhost:80/{version}/calc")
+//            URI("grpc://localhost:8080")
+//        })
+//    })
+//
 func URI(uri string) {
 	h, ok := eval.Current().(*expr.HostExpr)
 	if !ok {
@@ -173,21 +176,22 @@ func URI(uri string) {
 // The Variable DSL is the same as the Attribute DSL with the following two
 // restrictions:
 //
-//  1. The type used to define the variable must be a primitive.
-//  2. The variable must have a default value and/or a enum validation.
+//    1. The type used to define the variable must be a primitive.
+//    2. The variable must have a default value and/or a enum validation.
 //
 // Example:
 //
-//	var _ = Server("calcsvr", func() {
-//	    Host("production", func() {
-//	        URI("https://{version}.goa.design/calc")
-//	        URI("grpcs://{version}.goa.design")
+//    var _ = Server("calcsvr", func() {
+//        Host("production", func() {
+//            URI("https://{version}.goa.design/calc")
+//            URI("grpcs://{version}.goa.design")
 //
-//	        Variable("version", String, "API version", func() {
-//	            Enum("v1", "v2")
-//	        })
-//	    })
-//	})
+//            Variable("version", String, "API version", func() {
+//                Enum("v1", "v2")
+//            })
+//        })
+//    })
+//
 func Variable(name string, args ...any) {
 	if _, ok := eval.Current().(*expr.HostExpr); !ok {
 		eval.IncompatibleDSL()

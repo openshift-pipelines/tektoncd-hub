@@ -32,12 +32,6 @@ func CheckRedirect(policy func(req *http.Request, via []*http.Request) error) Op
 	}
 }
 
-func Debug() Option {
-	return func(c *Checker) {
-		c.debug = true
-	}
-}
-
 // NoRedirect is the alias of the following:
 //
 //	CheckRedirect(func(req *http.Request, via []*http.Request) error {
@@ -58,19 +52,11 @@ type Checker struct {
 	request  *http.Request
 	response *http.Response
 	pcookies map[string]bool
-
-	// Set external to true if testing an external server.
-	// In this case, handler and server are undefined.
-	external bool
-	url      string
 	server   *httptest.Server
 	handler  http.Handler
-
-	// debug mode
-	debug bool
 }
 
-// New creates an HTTP Checker for testing with the given handler.
+// New creates an HTTP Checker.
 func New(h http.Handler, options ...Option) *Checker {
 	jar, _ := cookiejar.New(nil)
 	ret := &Checker{
@@ -81,24 +67,6 @@ func New(h http.Handler, options ...Option) *Checker {
 		pcookies: map[string]bool{},
 		server:   createServer(h),
 		handler:  h,
-	}
-	for _, v := range options {
-		v(ret)
-	}
-	return ret
-}
-
-// NewExternal creates an HTTP Checker for testing an external server specified by url.
-func NewExternal(url string, options ...Option) *Checker {
-	jar, _ := cookiejar.New(nil)
-	ret := &Checker{
-		client: &http.Client{
-			Timeout: DefaultClientTimeout,
-			Jar:     jar,
-		},
-		pcookies: map[string]bool{},
-		external: true,
-		url:      url,
 	}
 	for _, v := range options {
 		v(ret)
@@ -151,8 +119,5 @@ func (c *Checker) Test(t TestingT, method, path string) *Tester {
 
 // GetURL returns the server URL.
 func (c *Checker) GetURL() string {
-	if c.external {
-		return c.url
-	}
 	return "http://" + c.server.Listener.Addr().String()
 }

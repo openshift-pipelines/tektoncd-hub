@@ -16,7 +16,7 @@ func Files(root *expr.RootExpr) ([]*codegen.File, error) {
 	spec := New(root)
 	jsonSection := &codegen.SectionTemplate{
 		Name:    "openapi_v3",
-		FuncMap: template.FuncMap{"toJSON": toJSON(root.API.Meta)},
+		FuncMap: template.FuncMap{"toJSON": toJSON},
 		Source:  "{{ toJSON .}}",
 		Data:    spec,
 	}
@@ -39,22 +39,12 @@ func Files(root *expr.RootExpr) ([]*codegen.File, error) {
 	}, nil
 }
 
-func toJSON(meta expr.MetaExpr) func(any) string {
-	prefix, p := meta.Last("openapi:json:prefix")
-	indent, i := meta.Last("openapi:json:indent")
-	marshal := json.Marshal
-	if p || i {
-		marshal = func(v any) ([]byte, error) {
-			return json.MarshalIndent(v, prefix, indent)
-		}
+func toJSON(d any) string {
+	b, err := json.Marshal(d)
+	if err != nil {
+		panic("openapi: " + err.Error()) // bug
 	}
-	return func(d any) string {
-		b, err := marshal(d)
-		if err != nil {
-			panic("openapi: " + err.Error()) // bug
-		}
-		return string(b)
-	}
+	return string(b)
 }
 
 func toYAML(d any) string {

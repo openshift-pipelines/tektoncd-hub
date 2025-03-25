@@ -103,15 +103,6 @@ import (
 //	    })
 //	})
 //
-// - "struct:name:proto" overrides the generated protobuf message name. Applicable
-// to Type and ResultType only.
-//
-//	var MyType = Type("MyType", func() {
-//	    Meta("struct:name:proto", "MyProtoType")
-//	    Field(1, "name", String)
-//	    Field(2, "age", Int32)
-//	})
-//
 // - "struct:tag:xxx" sets a generated Go struct field tag and overrides tags
 // that Goa would otherwise set. If the metadata value is a slice then the
 // strings are joined with the space character as separator. Applicable to
@@ -144,22 +135,6 @@ import (
 //
 //	var _ = Service("MyService", func() {
 //	    Meta("openapi:generate", "false")
-//	})
-//
-// - "openapi:json:prefix" specifies the prefix used to format the OpenAPI
-// specification encoded in JSON. It can be used with "openapi:json:indent".
-// Applicable to API only.
-//
-//	var _ = API("MyAPI", func() {
-//	    Meta("openapi:json:prefix", "  ")
-//	})
-//
-// - "openapi:json:indent" specifies the indent used to format the OpenAPI
-// specification encoded in JSON. It can be used with "openapi:json:prefix".
-// Applicable to API only.
-//
-//	var _ = API("MyAPI", func() {
-//	    Meta("openapi:json:indent", "  ")
 //	})
 //
 // - "swagger:summary" DEPRECATED, use "openapi:summary" instead
