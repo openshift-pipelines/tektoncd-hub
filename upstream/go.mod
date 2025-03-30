@@ -1,8 +1,8 @@
 module github.com/tektoncd/hub
 
-go 1.22.3
+go 1.24.0
 
-toolchain go1.22.9
+toolchain go1.24.1
 
 require (
 	github.com/ActiveState/vt10x v1.3.1
@@ -30,8 +30,8 @@ require (
 	go.uber.org/zap v1.27.0
 	goa.design/goa/v3 v3.19.1
 	goa.design/plugins/v3 v3.19.1
-	golang.org/x/term v0.29.0
-	golang.org/x/text v0.22.0
+	golang.org/x/term v0.30.0
+	golang.org/x/text v0.23.0
 	gopkg.in/h2non/gock.v1 v1.1.2
 	gorm.io/driver/postgres v1.5.2
 	gorm.io/gorm v1.25.12
@@ -78,7 +78,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-chi/chi/v5 v5.1.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.0.4 // indirect
+	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
@@ -124,7 +124,7 @@ require (
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/klauspost/compress v1.17.7 // indirect
 	github.com/kr/pty v1.1.8 // indirect
-	github.com/letsencrypt/boulder v0.0.0-20240620165639-de9c06129bec // indirect
+	github.com/letsencrypt/boulder v0.0.0-20250328235739-037c654d3d83 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/manveru/faker v0.0.0-20171103152722-9fbc68a78c4d // indirect
@@ -165,8 +165,8 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/contrib/detectors/gcp v1.32.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.54.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.54.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.55.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.55.0 // indirect
 	go.opentelemetry.io/otel v1.34.0 // indirect
 	go.opentelemetry.io/otel/metric v1.34.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.34.0 // indirect
@@ -174,14 +174,14 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/mod v0.21.0 // indirect
-	golang.org/x/net v0.34.0 // indirect
+	golang.org/x/net v0.37.0 // indirect
 	golang.org/x/oauth2 v0.25.0 // indirect
-	golang.org/x/sync v0.11.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/time v0.8.0 // indirect
+	golang.org/x/sync v0.12.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/time v0.10.0 // indirect
 	golang.org/x/tools v0.25.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/api v0.214.0 // indirect
