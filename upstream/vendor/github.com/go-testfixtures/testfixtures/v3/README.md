@@ -288,22 +288,6 @@ testfixtures.New(
 )
 ```
 
-## Disable checksum computation
-
-Checksums of each table in a database are computed at the end of each `Load()`,
-so subsequent calls to `Load()` do not reload the same data again, if nothing
-has changed in between.
-
-The drawback is that it can be slow for database with many tables. Also, it does not
-make sense to compute checksum, if you run `Load()` only once.
-
-```go
-testfixtures.New(
-        ...
-        testfixtures.SkipTableChecksumComputation(),
-)
-```
-
 ## Sequences
 
 For PostgreSQL and MySQL/MariaDB, this package also resets all
@@ -451,18 +435,6 @@ Tested using the `mssql` and `sqlserver` drivers from the
 testfixtures.New(
         ...
         testfixtures.Dialect("clickhouse"),
-)
-```
-
-### Spanner with GoogleSQL Dialect
-
-It's impossible to get Spanner database name to determine whether it's a test database or not. You need to make sure that you're actually using test database and use `testfixtures.DangerousSkipTestDatabaseCheck()` to skip the check.
-
-```go
-testfixtures.New(
-        ...
-        testfixtures.Dialect("spanner"),
-        testfixtures.DangerousSkipTestDatabaseCheck(),
 )
 ```
 

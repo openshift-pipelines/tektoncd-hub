@@ -90,7 +90,7 @@ paths:
                 "200":
                     description: OK response.
                     schema:
-                        $ref: '#/definitions/Job'
+                        $ref: '#/definitions/CatalogRefreshResponseBody'
                 "404":
                     description: Not Found response.
                     schema:
@@ -126,7 +126,7 @@ paths:
                     schema:
                         type: array
                         items:
-                            $ref: '#/definitions/Job'
+                            $ref: '#/definitions/JobResponse'
                 "500":
                     description: Internal Server Error response.
                     schema:
@@ -495,7 +495,7 @@ paths:
                 "301":
                     description: Moved Permanently response.
                     schema:
-                        $ref: '#/definitions/Resources'
+                        $ref: '#/definitions/ResourceListResponseBody'
             schemes:
                 - https
     /schema/swagger.json:
@@ -664,10 +664,10 @@ definitions:
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
+                example: false
         description: Internal server error (default view)
         example:
-            fault: true
+            fault: false
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
@@ -703,7 +703,7 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
@@ -714,8 +714,8 @@ definitions:
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: false
-            timeout: true
+            temporary: true
+            timeout: false
         required:
             - name
             - id
@@ -746,7 +746,7 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
@@ -758,7 +758,7 @@ definitions:
             message: parameter 'p' must be an integer
             name: bad_request
             temporary: false
-            timeout: false
+            timeout: true
         required:
             - name
             - id
@@ -785,7 +785,7 @@ definitions:
             fault:
                 type: boolean
                 description: Is the error a server-side fault?
-                example: true
+                example: false
             id:
                 type: string
                 description: ID is a unique identifier for this particular occurrence of the problem.
@@ -801,19 +801,19 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: true
+                example: false
             timeout:
                 type: boolean
                 description: Is the error a timeout?
                 example: true
         description: Internal server error (default view)
         example:
-            fault: false
+            fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
             temporary: true
-            timeout: true
+            timeout: false
         required:
             - name
             - id
@@ -844,19 +844,19 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: true
+                example: false
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
+                example: false
         description: Invalid request body (default view)
         example:
-            fault: false
+            fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
             temporary: true
-            timeout: true
+            timeout: false
         required:
             - name
             - id
@@ -871,7 +871,7 @@ definitions:
             fault:
                 type: boolean
                 description: Is the error a server-side fault?
-                example: true
+                example: false
             id:
                 type: string
                 description: ID is a unique identifier for this particular occurrence of the problem.
@@ -887,7 +887,7 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: true
+                example: false
             timeout:
                 type: boolean
                 description: Is the error a timeout?
@@ -930,19 +930,19 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: true
+                example: false
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
+                example: false
         description: Invalid User token (default view)
         example:
             fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: true
-            timeout: false
+            temporary: false
+            timeout: true
         required:
             - name
             - id
@@ -962,7 +962,7 @@ definitions:
                 type: array
                 items:
                     type: string
-                    example: Et vero aperiam.
+                    example: Corrupti atque odit expedita sit repellendus.
                 description: Scopes required for Agent
                 example:
                     - catalog-refresh
@@ -1021,7 +1021,7 @@ definitions:
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: false
+            temporary: true
             timeout: true
         required:
             - name
@@ -1037,13 +1037,9 @@ definitions:
             data:
                 type: array
                 items:
-                    $ref: '#/definitions/CatalogErrors'
+                    $ref: '#/definitions/CatalogErrorsResponseBody'
                 description: Catalog errors
                 example:
-                    - errors:
-                        - Resource tekton.dev/v1beta1, Kind=Task - buildah has no display name
-                        - Resource tekton.dev/v1beta1, Kind=task - curl has no display name
-                      type: warning
                     - errors:
                         - Resource tekton.dev/v1beta1, Kind=Task - buildah has no display name
                         - Resource tekton.dev/v1beta1, Kind=task - curl has no display name
@@ -1062,17 +1058,21 @@ definitions:
                     - Resource tekton.dev/v1beta1, Kind=Task - buildah has no display name
                     - Resource tekton.dev/v1beta1, Kind=task - curl has no display name
                   type: warning
+                - errors:
+                    - Resource tekton.dev/v1beta1, Kind=Task - buildah has no display name
+                    - Resource tekton.dev/v1beta1, Kind=task - curl has no display name
+                  type: warning
         required:
             - data
-    CatalogErrors:
-        title: CatalogErrors
+    CatalogErrorsResponseBody:
+        title: CatalogErrorsResponseBody
         type: object
         properties:
             errors:
                 type: array
                 items:
                     type: string
-                    example: Ratione quisquam.
+                    example: Mollitia voluptatibus voluptatem voluptates sint est officia.
                 description: Catalog Error message
                 example:
                     - Resource tekton.dev/v1beta1, Kind=Task - buildah has no display name
@@ -1117,14 +1117,14 @@ definitions:
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: false
+                example: true
         description: Internal Server Error (default view)
         example:
-            fault: false
+            fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: false
+            temporary: true
             timeout: true
         required:
             - name
@@ -1140,7 +1140,7 @@ definitions:
             fault:
                 type: boolean
                 description: Is the error a server-side fault?
-                example: true
+                example: false
             id:
                 type: string
                 description: ID is a unique identifier for this particular occurrence of the problem.
@@ -1156,7 +1156,7 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: true
+                example: false
             timeout:
                 type: boolean
                 description: Is the error a timeout?
@@ -1167,7 +1167,7 @@ definitions:
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: true
+            temporary: false
             timeout: false
         required:
             - name
@@ -1203,14 +1203,14 @@ definitions:
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
+                example: false
         description: Resource Not Found Error (default view)
         example:
             fault: false
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: true
+            temporary: false
             timeout: true
         required:
             - name
@@ -1219,6 +1219,32 @@ definitions:
             - temporary
             - timeout
             - fault
+    CatalogRefreshResponseBody:
+        title: 'Mediatype identifier: application/vnd.hub.job; view=default'
+        type: object
+        properties:
+            catalogName:
+                type: string
+                description: Name of the catalog
+                example: tekton
+            id:
+                type: integer
+                description: id of the job
+                example: 1
+                format: int64
+            status:
+                type: string
+                description: status of the job
+                example: queued
+        description: RefreshResponseBody result type (default view)
+        example:
+            catalogName: tekton
+            id: 1
+            status: queued
+        required:
+            - id
+            - catalogName
+            - status
     CatalogResponseBodyMin:
         title: 'Mediatype identifier: application/vnd.hub.catalog; view=default'
         type: object
@@ -1248,8 +1274,70 @@ definitions:
             - id
             - name
             - type
-    Category:
-        title: Category
+    CategoryListInternalErrorResponseBody:
+        title: 'Mediatype identifier: application/vnd.goa.error; view=default'
+        type: object
+        properties:
+            fault:
+                type: boolean
+                description: Is the error a server-side fault?
+                example: false
+            id:
+                type: string
+                description: ID is a unique identifier for this particular occurrence of the problem.
+                example: 123abc
+            message:
+                type: string
+                description: Message is a human-readable explanation specific to this occurrence of the problem.
+                example: parameter 'p' must be an integer
+            name:
+                type: string
+                description: Name is the name of this class of errors.
+                example: bad_request
+            temporary:
+                type: boolean
+                description: Is the error temporary?
+                example: true
+            timeout:
+                type: boolean
+                description: Is the error a timeout?
+                example: true
+        description: Internal Server Error (default view)
+        example:
+            fault: false
+            id: 123abc
+            message: parameter 'p' must be an integer
+            name: bad_request
+            temporary: false
+            timeout: true
+        required:
+            - name
+            - id
+            - message
+            - temporary
+            - timeout
+            - fault
+    CategoryListResponseBody:
+        title: CategoryListResponseBody
+        type: object
+        properties:
+            data:
+                type: array
+                items:
+                    $ref: '#/definitions/CategoryResponseBody'
+                example:
+                    - id: 1
+                      name: Image Builder
+                    - id: 1
+                      name: Image Builder
+        example:
+            data:
+                - id: 1
+                  name: Image Builder
+                - id: 1
+                  name: Image Builder
+    CategoryResponseBody:
+        title: CategoryResponseBody
         type: object
         properties:
             id:
@@ -1267,76 +1355,8 @@ definitions:
         required:
             - id
             - name
-    CategoryListInternalErrorResponseBody:
-        title: 'Mediatype identifier: application/vnd.goa.error; view=default'
-        type: object
-        properties:
-            fault:
-                type: boolean
-                description: Is the error a server-side fault?
-                example: true
-            id:
-                type: string
-                description: ID is a unique identifier for this particular occurrence of the problem.
-                example: 123abc
-            message:
-                type: string
-                description: Message is a human-readable explanation specific to this occurrence of the problem.
-                example: parameter 'p' must be an integer
-            name:
-                type: string
-                description: Name is the name of this class of errors.
-                example: bad_request
-            temporary:
-                type: boolean
-                description: Is the error temporary?
-                example: false
-            timeout:
-                type: boolean
-                description: Is the error a timeout?
-                example: true
-        description: Internal Server Error (default view)
-        example:
-            fault: false
-            id: 123abc
-            message: parameter 'p' must be an integer
-            name: bad_request
-            temporary: true
-            timeout: false
-        required:
-            - name
-            - id
-            - message
-            - temporary
-            - timeout
-            - fault
-    CategoryListResponseBody:
-        title: CategoryListResponseBody
-        type: object
-        properties:
-            data:
-                type: array
-                items:
-                    $ref: '#/definitions/Category'
-                example:
-                    - id: 1
-                      name: Image Builder
-                    - id: 1
-                      name: Image Builder
-                    - id: 1
-                      name: Image Builder
-                    - id: 1
-                      name: Image Builder
-        example:
-            data:
-                - id: 1
-                  name: Image Builder
-                - id: 1
-                  name: Image Builder
-                - id: 1
-                  name: Image Builder
-    HubService:
-        title: HubService
+    HubServiceResponseBody:
+        title: HubServiceResponseBody
         type: object
         properties:
             error:
@@ -1362,7 +1382,7 @@ definitions:
         required:
             - name
             - status
-    Job:
+    JobResponse:
         title: 'Mediatype identifier: application/vnd.hub.job; view=default'
         type: object
         properties:
@@ -1379,7 +1399,7 @@ definitions:
                 type: string
                 description: status of the job
                 example: queued
-        description: RefreshResponseBody result type (default view)
+        description: The Job type describes a catalog refresh job that is run asynchronously (default view)
         example:
             catalogName: tekton
             id: 1
@@ -1388,8 +1408,8 @@ definitions:
             - id
             - catalogName
             - status
-    Platform:
-        title: Platform
+    PlatformResponseBody:
+        title: PlatformResponseBody
         type: object
         properties:
             id:
@@ -1434,15 +1454,15 @@ definitions:
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
+                example: false
         description: Internal server error (default view)
         example:
-            fault: false
+            fault: true
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
             temporary: true
-            timeout: true
+            timeout: false
         required:
             - name
             - id
@@ -1457,7 +1477,7 @@ definitions:
             fault:
                 type: boolean
                 description: Is the error a server-side fault?
-                example: false
+                example: true
             id:
                 type: string
                 description: ID is a unique identifier for this particular occurrence of the problem.
@@ -1484,7 +1504,7 @@ definitions:
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: true
+            temporary: false
             timeout: true
         required:
             - name
@@ -1520,15 +1540,15 @@ definitions:
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
+                example: false
         description: Invalid User token (default view)
         example:
             fault: false
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: true
-            timeout: true
+            temporary: false
+            timeout: false
         required:
             - name
             - id
@@ -1559,11 +1579,11 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: true
+                example: false
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: false
+                example: true
         description: Resource Not Found Error (default view)
         example:
             fault: true
@@ -1615,7 +1635,7 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
@@ -1642,7 +1662,7 @@ definitions:
             fault:
                 type: boolean
                 description: Is the error a server-side fault?
-                example: true
+                example: false
             id:
                 type: string
                 description: ID is a unique identifier for this particular occurrence of the problem.
@@ -1658,7 +1678,7 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
@@ -1669,8 +1689,8 @@ definitions:
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
-            temporary: true
-            timeout: true
+            temporary: false
+            timeout: false
         required:
             - name
             - id
@@ -1701,11 +1721,11 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: false
+                example: true
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: false
+                example: true
         description: Invalid User token (default view)
         example:
             fault: true
@@ -1744,19 +1764,19 @@ definitions:
             temporary:
                 type: boolean
                 description: Is the error temporary?
-                example: true
+                example: false
             timeout:
                 type: boolean
                 description: Is the error a timeout?
-                example: true
+                example: false
         description: Resource Not Found Error (default view)
         example:
-            fault: true
+            fault: false
             id: 123abc
             message: parameter 'p' must be an integer
             name: bad_request
             temporary: true
-            timeout: true
+            timeout: false
         required:
             - name
             - id
@@ -1771,12 +1791,12 @@ definitions:
             rating:
                 type: integer
                 description: User rating for resource
-                example: 2
+                example: 4
                 format: int64
                 minimum: 0
                 maximum: 5
         example:
-            rating: 0
+            rating: 2
         required:
             - rating
     ResourceDataResponseBodyWithoutVersion:
@@ -1788,7 +1808,7 @@ definitions:
             categories:
                 type: array
                 items:
-                    $ref: '#/definitions/Category'
+                    $ref: '#/definitions/CategoryResponseBody'
                 description: Categories related to resource
                 example:
                     - id: 1
@@ -1819,7 +1839,7 @@ definitions:
             platforms:
                 type: array
                 items:
-                    $ref: '#/definitions/Platform'
+                    $ref: '#/definitions/PlatformResponseBody'
                 description: Platforms related to resource
                 example:
                     - id: 1
@@ -1832,7 +1852,7 @@ definitions:
             tags:
                 type: array
                 items:
-                    $ref: '#/definitions/Tag'
+                    $ref: '#/definitions/TagResponseBody'
                 description: Tags related to resource
                 example:
                     - id: 1
@@ -1954,95 +1974,39 @@ definitions:
               tags:
                 - id: 1
                   name: image-build
-    ResourceVersionDataResponseBodyWithoutResource:
-        title: 'Mediatype identifier: application/vnd.hub.resource.version.data; view=default'
-        type: object
-        properties:
-            deprecated:
-                type: boolean
-                description: Deprecation status of a version
-                example: true
-            description:
-                type: string
-                description: Description of version
-                example: Buildah task builds source into a container image and then pushes it to a container registry.
-            displayName:
-                type: string
-                description: Display name of version
-                example: Buildah
-            hubRawURLPath:
-                type: string
-                description: Path of the api to get the raw yaml of resource from hub apiserver
-                example: /tekton/task/buildah/raw
-            hubURLPath:
-                type: string
-                description: Url path of the resource in hub
-                example: tekton/task/buildah
-            id:
-                type: integer
-                description: ID is the unique id of resource's version
-                example: 1
-                format: int64
-            minPipelinesVersion:
-                type: string
-                description: Minimum pipelines version the resource's version is compatible with
-                example: 0.12.1
-            platforms:
-                type: array
-                items:
-                    $ref: '#/definitions/Platform'
-                description: Platforms related to resource version
-                example:
-                    - id: 1
-                      name: linux/s390x
-            rawURL:
-                type: string
-                description: Raw URL of resource's yaml file of the version
-                example: https://raw.githubusercontent.com/tektoncd/catalog/main/task/buildah/0.1/buildah.yaml
-                format: uri
-            updatedAt:
-                type: string
-                description: Timestamp when version was last updated
-                example: 2020-01-01 12:00:00 +0000 UTC
-                format: date-time
-            version:
-                type: string
-                description: Version of resource
-                example: "0.1"
-            webURL:
-                type: string
-                description: Web URL of resource's yaml file of the version
-                example: https://github.com/tektoncd/catalog/blob/main/task/buildah/0.1/buildah.yaml
-                format: uri
-        description: The Version result type describes resource's version information. (withoutResource view) (default view)
-        example:
-            deprecated: true
-            description: Buildah task builds source into a container image and then pushes it to a container registry.
-            displayName: Buildah
-            hubRawURLPath: /tekton/task/buildah/raw
-            hubURLPath: tekton/task/buildah
-            id: 1
-            minPipelinesVersion: 0.12.1
-            platforms:
+            - catalog:
+                id: 1
+                name: tekton
+                type: community
+              categories:
                 - id: 1
-                  name: linux/s390x
-            rawURL: https://raw.githubusercontent.com/tektoncd/catalog/main/task/buildah/0.1/buildah.yaml
-            updatedAt: 2020-01-01 12:00:00 +0000 UTC
-            version: "0.1"
-            webURL: https://github.com/tektoncd/catalog/blob/main/task/buildah/0.1/buildah.yaml
-        required:
-            - id
-            - version
-            - displayName
-            - description
-            - minPipelinesVersion
-            - rawURL
-            - webURL
-            - updatedAt
-            - platforms
-            - hubURLPath
-            - hubRawURLPath
-    Resources:
+                  name: image-build
+              hubRawURLPath: /tekton/task/buildah/raw
+              hubURLPath: tekton/task/buildah
+              id: 1
+              kind: task
+              latestVersion:
+                description: Buildah task builds source into a container image and then pushes it to a container registry.
+                displayName: Buildah
+                hubRawURLPath: /tekton/task/buildah/latest/raw
+                id: 1
+                minPipelinesVersion: 0.12.1
+                platforms:
+                    - id: 1
+                      name: linux/amd64
+                rawURL: https://raw.githubusercontent.com/tektoncd/catalog/main/task/buildah/0.1/buildah.yaml
+                updatedAt: 2020-01-01 12:00:00 +0000 UTC
+                version: "0.1"
+                webURL: https://github.com/tektoncd/catalog/blob/main/task/buildah/0.1/buildah.yaml
+              name: buildah
+              platforms:
+                - id: 1
+                  name: linux/amd64
+              rating: 4.3
+              tags:
+                - id: 1
+                  name: image-build
+    ResourceListResponseBody:
         title: 'Mediatype identifier: application/vnd.hub.resources; view=default'
         type: object
         properties:
@@ -2149,6 +2113,94 @@ definitions:
                       name: image-build
         required:
             - data
+    ResourceVersionDataResponseBodyWithoutResource:
+        title: 'Mediatype identifier: application/vnd.hub.resource.version.data; view=default'
+        type: object
+        properties:
+            deprecated:
+                type: boolean
+                description: Deprecation status of a version
+                example: true
+            description:
+                type: string
+                description: Description of version
+                example: Buildah task builds source into a container image and then pushes it to a container registry.
+            displayName:
+                type: string
+                description: Display name of version
+                example: Buildah
+            hubRawURLPath:
+                type: string
+                description: Path of the api to get the raw yaml of resource from hub apiserver
+                example: /tekton/task/buildah/raw
+            hubURLPath:
+                type: string
+                description: Url path of the resource in hub
+                example: tekton/task/buildah
+            id:
+                type: integer
+                description: ID is the unique id of resource's version
+                example: 1
+                format: int64
+            minPipelinesVersion:
+                type: string
+                description: Minimum pipelines version the resource's version is compatible with
+                example: 0.12.1
+            platforms:
+                type: array
+                items:
+                    $ref: '#/definitions/PlatformResponseBody'
+                description: Platforms related to resource version
+                example:
+                    - id: 1
+                      name: linux/s390x
+            rawURL:
+                type: string
+                description: Raw URL of resource's yaml file of the version
+                example: https://raw.githubusercontent.com/tektoncd/catalog/main/task/buildah/0.1/buildah.yaml
+                format: uri
+            updatedAt:
+                type: string
+                description: Timestamp when version was last updated
+                example: 2020-01-01 12:00:00 +0000 UTC
+                format: date-time
+            version:
+                type: string
+                description: Version of resource
+                example: "0.1"
+            webURL:
+                type: string
+                description: Web URL of resource's yaml file of the version
+                example: https://github.com/tektoncd/catalog/blob/main/task/buildah/0.1/buildah.yaml
+                format: uri
+        description: The Version result type describes resource's version information. (withoutResource view) (default view)
+        example:
+            deprecated: true
+            description: Buildah task builds source into a container image and then pushes it to a container registry.
+            displayName: Buildah
+            hubRawURLPath: /tekton/task/buildah/raw
+            hubURLPath: tekton/task/buildah
+            id: 1
+            minPipelinesVersion: 0.12.1
+            platforms:
+                - id: 1
+                  name: linux/s390x
+            rawURL: https://raw.githubusercontent.com/tektoncd/catalog/main/task/buildah/0.1/buildah.yaml
+            updatedAt: 2020-01-01 12:00:00 +0000 UTC
+            version: "0.1"
+            webURL: https://github.com/tektoncd/catalog/blob/main/task/buildah/0.1/buildah.yaml
+        required:
+            - id
+            - version
+            - displayName
+            - description
+            - minPipelinesVersion
+            - rawURL
+            - webURL
+            - updatedAt
+            - platforms
+            - hubURLPath
+            - hubRawURLPath
     StatusStatusResponseBody:
         title: StatusStatusResponseBody
         type: object
@@ -2156,9 +2208,15 @@ definitions:
             services:
                 type: array
                 items:
-                    $ref: '#/definitions/HubService'
+                    $ref: '#/definitions/HubServiceResponseBody'
                 description: List of services and their status
                 example:
+                    - error: unable to reach db
+                      name: api
+                      status: ok
+                    - error: unable to reach db
+                      name: api
+                      status: ok
                     - error: unable to reach db
                       name: api
                       status: ok
@@ -2173,8 +2231,11 @@ definitions:
                 - error: unable to reach db
                   name: api
                   status: ok
-    Tag:
-        title: Tag
+                - error: unable to reach db
+                  name: api
+                  status: ok
+    TagResponseBody:
+        title: TagResponseBody
         type: object
         properties:
             id:
