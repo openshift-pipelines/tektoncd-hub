@@ -1,11 +1,11 @@
 
 
     {{ comment "Wait for signal." }}
-	log.Printf(ctx, "exiting (%v)", <-errc)
+	logger.Printf("exiting (%v)", <-errc)
 
 	{{ comment "Send cancellation signal to the goroutines." }}
 	cancel()
 
 	wg.Wait()
-	log.Printf(ctx, "exited")
+	logger.Println("exited")
 }

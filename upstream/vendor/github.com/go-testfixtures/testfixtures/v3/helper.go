@@ -3,7 +3,6 @@ package testfixtures
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 )
 
 const (
@@ -21,11 +20,10 @@ type helper interface {
 	databaseName(queryable) (string, error)
 	tableNames(queryable) ([]string, error)
 	isTableModified(queryable, string) (bool, error)
-	computeTablesChecksum(queryable) error
+	afterLoad(queryable) error
 	quoteKeyword(string) string
 	whileInsertOnTable(*sql.Tx, string, func() error) error
 	cleanTableQuery(string) string
-	buildInsertSQL(q queryable, tableName string, columns, values []string) (string, error)
 }
 
 type queryable interface {
@@ -34,9 +32,18 @@ type queryable interface {
 	QueryRow(string, ...interface{}) *sql.Row
 }
 
+// batchSplitter is an interface with method which returns byte slice for
+// splitting SQL batches. This need to split sql statements and run its
+// separately.
+//
+// For Microsoft SQL Server batch splitter is "GO". For details see
+// https://docs.microsoft.com/en-us/sql/t-sql/language-elements/sql-server-utilities-statements-go
+type batchSplitter interface { //nolint
+	splitter() []byte
+}
+
 var (
 	_ helper = &clickhouse{}
-	_ helper = &spanner{}
 	_ helper = &mySQL{}
 	_ helper = &postgreSQL{}
 	_ helper = &sqlite{}
@@ -61,19 +68,10 @@ func (baseHelper) isTableModified(_ queryable, _ string) (bool, error) {
 	return true, nil
 }
 
-func (baseHelper) computeTablesChecksum(_ queryable) error {
+func (baseHelper) afterLoad(_ queryable) error {
 	return nil
 }
 
 func (baseHelper) cleanTableQuery(tableName string) string {
 	return fmt.Sprintf("DELETE FROM %s", tableName)
-}
-
-func (h baseHelper) buildInsertSQL(_ queryable, tableName string, columns, values []string) (string, error) {
-	return fmt.Sprintf(
-		"INSERT INTO %s (%s) VALUES (%s)",
-		tableName,
-		strings.Join(columns, ", "),
-		strings.Join(values, ", "),
-	), nil
 }

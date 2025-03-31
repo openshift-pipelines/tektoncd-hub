@@ -1,6 +1,8 @@
 	{{- $servBodyLen := len .ServerBody }}
 	{{- if gt $servBodyLen 0 }}
 	enc := encoder(ctx, w)
+	{{- end }}
+	{{- if gt $servBodyLen 0 }}
 		{{- if and (gt $servBodyLen 1) $.ViewedResult }}
 	var body any
 	switch res.View	{
