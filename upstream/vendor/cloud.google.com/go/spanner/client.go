@@ -25,7 +25,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"cloud.google.com/go/internal/trace"
@@ -350,9 +349,16 @@ type ClientConfig struct {
 	//
 	// Default: false
 	EnableEndToEndTracing bool
+
+	// DisableNativeMetrics indicates whether native metrics should be disabled or not.
+	// If true, native metrics will not be emitted.
+	//
+	// Default: false
+	DisableNativeMetrics bool
 }
 
 type openTelemetryConfig struct {
+	enabled                        bool
 	meterProvider                  metric.MeterProvider
 	attributeMap                   []attribute.KeyValue
 	attributeMapWithMultiplexed    []attribute.KeyValue
@@ -428,6 +434,14 @@ func newClientWithConfig(ctx context.Context, database string, config ClientConf
 	} else {
 		// Create gtransport ConnPool as usual if MultiEndpoint is not used.
 		// gRPC options.
+
+		// Add a unaryClientInterceptor and streamClientInterceptor.
+		reqIDInjector := new(requestIDHeaderInjector)
+		opts = append(opts,
+			option.WithGRPCDialOption(grpc.WithChainStreamInterceptor(reqIDInjector.interceptStream)),
+			option.WithGRPCDialOption(grpc.WithChainUnaryInterceptor(reqIDInjector.interceptUnary)),
+		)
+
 		allOpts := allClientOpts(config.NumChannels, config.Compression, opts...)
 		pool, err = gtransport.DialPool(ctx, allOpts...)
 		if err != nil {
@@ -474,6 +488,27 @@ func newClientWithConfig(ctx context.Context, database string, config ClientConf
 		md.Append(endToEndTracingHeader, "true")
 	}
 
+	if isMultiplexed := strings.ToLower(os.Getenv("GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS")); isMultiplexed != "" && !config.enableMultiplexSession {
+		config.enableMultiplexSession, err = strconv.ParseBool(isMultiplexed)
+		if err != nil {
+			return nil, spannerErrorf(codes.InvalidArgument, "GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS must be either true or false")
+		}
+	}
+	if isMultiplexForRW := os.Getenv("GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS_FOR_RW"); isMultiplexForRW != "" && !config.enableMultiplexedSessionForRW {
+		config.enableMultiplexedSessionForRW, err = strconv.ParseBool(isMultiplexForRW)
+		if err != nil {
+			return nil, spannerErrorf(codes.InvalidArgument, "GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS_FOR_RW must be either true or false")
+		}
+		config.enableMultiplexedSessionForRW = config.enableMultiplexedSessionForRW && config.SessionPoolConfig.enableMultiplexSession
+	}
+	if isMultiplexForPartitionOps := os.Getenv("GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS_PARTITIONED_OPS"); isMultiplexForPartitionOps != "" && !config.enableMultiplexedSessionForPartitionedOps {
+		config.enableMultiplexedSessionForPartitionedOps, err = strconv.ParseBool(isMultiplexForPartitionOps)
+		if err != nil {
+			return nil, spannerErrorf(codes.InvalidArgument, "GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS_PARTITIONED_OPS must be either true or false")
+		}
+		config.enableMultiplexedSessionForPartitionedOps = config.enableMultiplexedSessionForPartitionedOps && config.SessionPoolConfig.enableMultiplexSession
+	}
+
 	// Create a session client.
 	sc := newSessionClient(pool, database, config.UserAgent, sessionLabels, config.DatabaseRole, config.DisableRouteToLeader, md, config.BatchTimeout, config.Logger, config.CallOptions)
 
@@ -493,18 +528,16 @@ func newClientWithConfig(ctx context.Context, database string, config ClientConf
 		// Do not emit native metrics when emulator is being used
 		metricsProvider = noop.NewMeterProvider()
 	}
-
-	// SPANNER_ENABLE_BUILTIN_METRICS environment variable is used to enable
-	// native metrics for the Spanner client, which overrides the default.
-	//
-	// This is an EXPERIMENTAL feature and may be changed or removed in the future.
-	if os.Getenv("SPANNER_ENABLE_BUILTIN_METRICS") != "true" {
-		// Do not emit native metrics when SPANNER_ENABLE_BUILTIN_METRICS is not set to true
+	// Check if native metrics are disabled via env.
+	if disableNativeMetrics, _ := strconv.ParseBool(os.Getenv("SPANNER_DISABLE_BUILTIN_METRICS")); disableNativeMetrics {
+		config.DisableNativeMetrics = true
+	}
+	if config.DisableNativeMetrics {
+		// Do not emit native metrics when DisableNativeMetrics is set
 		metricsProvider = noop.NewMeterProvider()
 	}
 
-	// Create a OpenTelemetry metrics configuration
-	metricsTracerFactory, err := newBuiltinMetricsTracerFactory(ctx, database, metricsProvider)
+	metricsTracerFactory, err := newBuiltinMetricsTracerFactory(ctx, database, metricsProvider, config.Compression, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -588,11 +621,11 @@ func allClientOpts(numChannels int, compression string, userOpts ...option.Clien
 	clientDefaultOpts := []option.ClientOption{
 		option.WithGRPCConnectionPool(numChannels),
 		option.WithUserAgent(fmt.Sprintf("spanner-go/v%s", internal.Version)),
-		internaloption.AllowNonDefaultServiceAccount(true),
 		option.WithGRPCDialOption(grpc.WithChainUnaryInterceptor(addNativeMetricsInterceptor()...)),
 		option.WithGRPCDialOption(grpc.WithChainStreamInterceptor(addStreamNativeMetricsInterceptor()...)),
 	}
 	if enableDirectPathXds, _ := strconv.ParseBool(os.Getenv("GOOGLE_SPANNER_ENABLE_DIRECT_ACCESS")); enableDirectPathXds {
+		clientDefaultOpts = append(clientDefaultOpts, internaloption.AllowNonDefaultServiceAccount(true))
 		clientDefaultOpts = append(clientDefaultOpts, internaloption.EnableDirectPath(true), internaloption.EnableDirectPathXds())
 	}
 	if compression == "gzip" {
@@ -651,29 +684,19 @@ func metricsInterceptor() grpc.UnaryClientInterceptor {
 // wrappedStream  wraps around the embedded grpc.ClientStream, and intercepts the RecvMsg and
 // SendMsg method call.
 type wrappedStream struct {
-	sync.Mutex
-	isFirstRecv bool
-	method      string
-	target      string
+	method string
+	target string
 	grpc.ClientStream
 }
 
 func (w *wrappedStream) RecvMsg(m any) error {
-	attempt := &attemptTracer{}
-	attempt.setStartTime(time.Now())
 	err := w.ClientStream.RecvMsg(m)
-	statusCode, _ := status.FromError(err)
 	ctx := w.ClientStream.Context()
 	mt, ok := ctx.Value(metricsTracerKey).(*builtinMetricsTracer)
-	if !ok || !w.isFirstRecv {
+	if !ok {
 		return err
 	}
-	w.Lock()
-	w.isFirstRecv = false
-	w.Unlock()
 	mt.method = w.method
-	mt.currOp.incrementAttemptCount()
-	mt.currOp.currAttempt = attempt
 	if strings.HasPrefix(w.target, "google-c2p") {
 		mt.currOp.setDirectPathEnabled(true)
 	}
@@ -687,9 +710,9 @@ func (w *wrappedStream) RecvMsg(m any) error {
 			}
 		}
 	}
-	mt.currOp.currAttempt.setStatus(statusCode.Code().String())
-	mt.currOp.currAttempt.setDirectPathUsed(isDirectPathUsed)
-	recordAttemptCompletion(mt)
+	if mt.currOp.currAttempt != nil {
+		mt.currOp.currAttempt.setDirectPathUsed(isDirectPathUsed)
+	}
 	return err
 }
 
@@ -698,7 +721,7 @@ func (w *wrappedStream) SendMsg(m any) error {
 }
 
 func newWrappedStream(s grpc.ClientStream, method, target string) grpc.ClientStream {
-	return &wrappedStream{ClientStream: s, method: method, target: target, isFirstRecv: true}
+	return &wrappedStream{ClientStream: s, method: method, target: target}
 }
 
 // metricsInterceptor is a gRPC stream client interceptor that records metrics for stream RPCs.
@@ -755,7 +778,7 @@ func getQueryOptions(opts QueryOptions) QueryOptions {
 // Close closes the client.
 func (c *Client) Close() {
 	if c.metricsTracerFactory != nil {
-		c.metricsTracerFactory.shutdown()
+		c.metricsTracerFactory.shutdown(context.Background())
 	}
 	if c.idleSessions != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -851,13 +874,20 @@ func (c *Client) BatchReadOnlyTransaction(ctx context.Context, tb TimestampBound
 		err error
 	)
 
-	// Create session.
-	s, err = c.sc.createSession(ctx)
-	if err != nil {
-		return nil, err
+	if c.idleSessions.isMultiplexedSessionForPartitionedOpsEnabled() {
+		sh, err = c.idleSessions.takeMultiplexed(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Create session.
+		s, err = c.sc.createSession(ctx)
+		if err != nil {
+			return nil, err
+		}
+		sh = &sessionHandle{session: s}
+		sh.updateLastUseTime()
 	}
-	sh = &sessionHandle{session: s}
-	sh.updateLastUseTime()
 
 	// Begin transaction.
 	res, err := sh.getClient().BeginTransaction(contextWithOutgoingMetadata(ctx, sh.getMetadata(), true), &sppb.BeginTransactionRequest{
@@ -869,6 +899,9 @@ func (c *Client) BatchReadOnlyTransaction(ctx context.Context, tb TimestampBound
 		},
 	})
 	if err != nil {
+		if isUnimplementedErrorForMultiplexedPartitionedDML(err) && c.idleSessions.isMultiplexedSessionForPartitionedOpsEnabled() {
+			c.idleSessions.disableMultiplexedSessionForRW()
+		}
 		return nil, ToSpannerError(err)
 	}
 	tx = res.Id
@@ -1007,8 +1040,12 @@ func (c *Client) rwTransaction(ctx context.Context, f func(context.Context, *Rea
 			err error
 		)
 		if sh == nil || sh.getID() == "" || sh.getClient() == nil {
-			// Session handle hasn't been allocated or has been destroyed.
-			sh, err = c.idleSessions.take(ctx)
+			if c.idleSessions.isMultiplexedSessionForRWEnabled() {
+				sh, err = c.idleSessions.takeMultiplexed(ctx)
+			} else {
+				// Session handle hasn't been allocated or has been destroyed.
+				sh, err = c.idleSessions.take(ctx)
+			}
 			if err != nil {
 				// If session retrieval fails, just fail the transaction.
 				return err
@@ -1022,13 +1059,18 @@ func (c *Client) rwTransaction(ctx context.Context, f func(context.Context, *Rea
 			// Note that the t.begin(ctx) call could change the session that is being used by the transaction, as the
 			// BeginTransaction RPC invocation will be retried on a new session if it returns SessionNotFound.
 			t.txReadOnly.sh = sh
-			if err = t.begin(ctx); err != nil {
+			if err = t.begin(ctx, nil); err != nil {
 				trace.TracePrintf(ctx, nil, "Error while BeginTransaction during retrying a ReadWrite transaction: %v", ToSpannerError(err))
 				return ToSpannerError(err)
 			}
 		} else {
+			var previousTx transactionID
+			if t != nil {
+				previousTx = t.previousTx
+			}
 			t = &ReadWriteTransaction{
 				txReadyOrClosed: make(chan struct{}),
+				previousTx:      previousTx,
 			}
 			t.txReadOnly.sh = sh
 		}
@@ -1049,6 +1091,9 @@ func (c *Client) rwTransaction(ctx context.Context, f func(context.Context, *Rea
 		resp, err = t.runInTransaction(ctx, f)
 		return err
 	})
+	if isUnimplementedErrorForMultiplexedRW(err) {
+		c.idleSessions.disableMultiplexedSessionForRW()
+	}
 	return resp, err
 }
 
@@ -1067,6 +1112,8 @@ type applyOption struct {
 	excludeTxnFromChangeStreams bool
 	// commitOptions is the commit options to use for the commit operation.
 	commitOptions CommitOptions
+	// It defines the isolationLevel for the RW transactions
+	isolationLevel sppb.TransactionOptions_IsolationLevel
 }
 
 // An ApplyOption is an optional argument to Apply.
@@ -1112,6 +1159,13 @@ func ExcludeTxnFromChangeStreams() ApplyOption {
 	}
 }
 
+// IsolationLevel returns an ApplyOptions that sets which isolationLevel for RW transaction
+func IsolationLevel(isolationLevel sppb.TransactionOptions_IsolationLevel) ApplyOption {
+	return func(ao *applyOption) {
+		ao.isolationLevel = isolationLevel
+	}
+}
+
 // ApplyCommitOptions returns an ApplyOption that sets the commit options to use for the commit operation.
 func ApplyCommitOptions(co CommitOptions) ApplyOption {
 	return func(ao *applyOption) {
@@ -1137,10 +1191,10 @@ func (c *Client) Apply(ctx context.Context, ms []*Mutation, opts ...ApplyOption)
 	if !ao.atLeastOnce {
 		resp, err := c.ReadWriteTransactionWithOptions(ctx, func(ctx context.Context, t *ReadWriteTransaction) error {
 			return t.BufferWrite(ms)
-		}, TransactionOptions{CommitPriority: ao.priority, TransactionTag: ao.transactionTag, ExcludeTxnFromChangeStreams: ao.excludeTxnFromChangeStreams, CommitOptions: ao.commitOptions})
+		}, TransactionOptions{CommitPriority: ao.priority, TransactionTag: ao.transactionTag, ExcludeTxnFromChangeStreams: ao.excludeTxnFromChangeStreams, CommitOptions: ao.commitOptions, IsolationLevel: ao.isolationLevel})
 		return resp.CommitTs, err
 	}
-	t := &writeOnlyTransaction{sp: c.idleSessions, commitPriority: ao.priority, transactionTag: ao.transactionTag, disableRouteToLeader: c.disableRouteToLeader, excludeTxnFromChangeStreams: ao.excludeTxnFromChangeStreams, commitOptions: ao.commitOptions}
+	t := &writeOnlyTransaction{sp: c.idleSessions, commitPriority: ao.priority, transactionTag: ao.transactionTag, disableRouteToLeader: c.disableRouteToLeader, excludeTxnFromChangeStreams: ao.excludeTxnFromChangeStreams, commitOptions: ao.commitOptions, isolationLevel: ao.isolationLevel}
 	return t.applyAtLeastOnce(ctx, ms...)
 }
 
