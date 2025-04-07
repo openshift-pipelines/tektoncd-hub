@@ -51,7 +51,6 @@ func init() {
 		"builtins":       argFunc0(nil),
 		"input":          argFunc0(nil),
 		"modulemeta":     argFunc0(nil),
-		"debug":          argFunc1(nil),
 		"abs":            argFunc0(funcAbs),
 		"length":         argFunc0(funcLength),
 		"utf8bytelength": argFunc0(funcUtf8ByteLength),
@@ -603,7 +602,7 @@ func indices(vs, xs []any) any {
 		return rs
 	}
 	for i := 0; i <= len(vs)-len(xs); i++ {
-		if Compare(vs[i:i+len(xs)], xs) == 0 {
+		if compare(vs[i:i+len(xs)], xs) == 0 {
 			rs = append(rs, i)
 		}
 	}
@@ -616,7 +615,7 @@ func funcIndex(v, x any) any {
 			return nil
 		}
 		for i := 0; i <= len(vs)-len(xs); i++ {
-			if Compare(vs[i:i+len(xs)], xs) == 0 {
+			if compare(vs[i:i+len(xs)], xs) == 0 {
 				return i
 			}
 		}
@@ -630,7 +629,7 @@ func funcRindex(v, x any) any {
 			return nil
 		}
 		for i := len(vs) - len(xs); i >= 0; i-- {
-			if Compare(vs[i:i+len(xs)], xs) == 0 {
+			if compare(vs[i:i+len(xs)], xs) == 0 {
 				return i
 			}
 		}
@@ -1189,7 +1188,7 @@ type rangeIter struct {
 }
 
 func (iter *rangeIter) Next() (any, bool) {
-	if Compare(iter.step, 0)*Compare(iter.value, iter.end) >= 0 {
+	if compare(iter.step, 0)*compare(iter.value, iter.end) >= 0 {
 		return nil, false
 	}
 	v := iter.value
@@ -1260,7 +1259,7 @@ func minMaxBy(vs, xs []any, isMin bool) any {
 	}
 	i, j, x := 0, 0, xs[0]
 	for i++; i < len(xs); i++ {
-		if Compare(x, xs[i]) > 0 == isMin {
+		if compare(x, xs[i]) > 0 == isMin {
 			j, x = i, xs[i]
 		}
 	}
@@ -1291,7 +1290,7 @@ func sortItems(name string, v, x any) ([]*sortItem, error) {
 		items[i] = &sortItem{v, xs[i]}
 	}
 	sort.SliceStable(items, func(i, j int) bool {
-		return Compare(items[i].key, items[j].key) < 0
+		return compare(items[i].key, items[j].key) < 0
 	})
 	return items, nil
 }
@@ -1324,7 +1323,7 @@ func funcGroupBy(v, x any) any {
 	rs := []any{}
 	var last any
 	for i, r := range items {
-		if i == 0 || Compare(last, r.key) != 0 {
+		if i == 0 || compare(last, r.key) != 0 {
 			rs, last = append(rs, []any{r.value}), r.key
 		} else {
 			rs[len(rs)-1] = append(rs[len(rs)-1].([]any), r.value)
@@ -1349,7 +1348,7 @@ func uniqueBy(name string, v, x any) any {
 	rs := []any{}
 	var last any
 	for i, r := range items {
-		if i == 0 || Compare(last, r.key) != 0 {
+		if i == 0 || compare(last, r.key) != 0 {
 			rs, last = append(rs, r.value), r.key
 		}
 	}
@@ -1827,9 +1826,9 @@ func funcBsearch(v, t any) any {
 		return &func1TypeError{"bsearch", v, t}
 	}
 	i := sort.Search(len(vs), func(i int) bool {
-		return Compare(vs[i], t) >= 0
+		return compare(vs[i], t) >= 0
 	})
-	if i < len(vs) && Compare(vs[i], t) == 0 {
+	if i < len(vs) && compare(vs[i], t) == 0 {
 		return i
 	}
 	return -i - 1

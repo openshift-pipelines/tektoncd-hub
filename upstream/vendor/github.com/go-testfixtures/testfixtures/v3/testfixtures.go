@@ -23,10 +23,9 @@ type Loader struct {
 	helper        helper
 	fixturesFiles []*fixtureFile
 
-	skipCleanup             bool
-	skipChecksumComputation bool
-	skipTestDatabaseCheck   bool
-	location                *time.Location
+	skipCleanup           bool
+	skipTestDatabaseCheck bool
+	location              *time.Location
 
 	template           bool
 	templateFuncs      template.FuncMap
@@ -112,7 +111,7 @@ func Database(db *sql.DB) func(*Loader) error {
 // Dialect informs Loader about which database dialect you're using.
 //
 // Possible options are "postgresql", "timescaledb", "mysql", "mariadb",
-// "sqlite", "sqlserver", "clickhouse", "spanner".
+// "sqlite", "sqlserver", "clickhouse".
 func Dialect(dialect string) func(*Loader) error {
 	return func(l *Loader) error {
 		h, err := helperForDialect(dialect)
@@ -136,8 +135,6 @@ func helperForDialect(dialect string) (helper, error) {
 		return &sqlserver{}, nil
 	case "clickhouse":
 		return &clickhouse{}, nil
-	case "spanner":
-		return &spanner{}, nil
 	default:
 		return nil, fmt.Errorf(`testfixtures: unrecognized dialect "%s"`, dialect)
 	}
@@ -228,16 +225,6 @@ func DangerousSkipTestDatabaseCheck() func(*Loader) error {
 func DangerousSkipCleanupFixtureTables() func(*Loader) error {
 	return func(l *Loader) error {
 		l.skipCleanup = true
-		return nil
-	}
-}
-
-// SkipTableChecksumComputation will make Loader not compute table checksum at the end of the Loader.Load.
-// This may improve performance. It may also slow down subsequent calls to Loader.Load, because checksums are used
-// to not reload unchanged tables.
-func SkipTableChecksumComputation() func(*Loader) error {
-	return func(l *Loader) error {
-		l.skipChecksumComputation = true
 		return nil
 	}
 }
@@ -470,12 +457,7 @@ func (l *Loader) Load() error {
 	if err != nil {
 		return err
 	}
-	if !l.skipChecksumComputation {
-		if err := l.helper.computeTablesChecksum(l.db); err != nil {
-			return err
-		}
-	}
-	return nil
+	return l.helper.afterLoad(l.db)
 }
 
 // InsertError will be returned if any error happens on database while
@@ -602,10 +584,11 @@ func (l *Loader) buildInsertSQL(f *fixtureFile, record map[string]interface{}) (
 		i++
 	}
 
-	sqlStr, err = l.helper.buildInsertSQL(
-		l.db,
+	sqlStr = fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s)",
 		l.helper.quoteKeyword(f.fileNameWithoutExtension()),
-		sqlColumns, sqlValues,
+		strings.Join(sqlColumns, ", "),
+		strings.Join(sqlValues, ", "),
 	)
 	return
 }
@@ -691,7 +674,9 @@ func (l *Loader) fixturesFromPaths(paths ...string) ([]*fixtureFile, error) {
 }
 
 func (l *Loader) fixturesFromFilesMultiTables(fileNames ...string) ([]*fixtureFile, error) {
-	fixtureFiles := make([]*fixtureFile, 0, len(fileNames))
+	var (
+		fixtureFiles = make([]*fixtureFile, 0, len(fileNames))
+	)
 
 	for _, f := range fileNames {
 		var (

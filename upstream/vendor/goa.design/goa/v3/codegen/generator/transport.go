@@ -10,7 +10,8 @@ import (
 )
 
 // Transport iterates through the roots and returns the files needed to render
-// the transport code.
+// the transport code. It returns an error if the roots slice does not include
+// at least one transport design.
 func Transport(genpkg string, roots []eval.Root) ([]*codegen.File, error) {
 	var files []*codegen.File
 	for _, root := range roots {

@@ -22,7 +22,7 @@ func NewV2(root *expr.RootExpr, h *expr.HostExpr) (*V2, error) {
 	if err != nil {
 		// This should never happen because server expression must have been
 		// validated. If it does, then we must fix server validation.
-		return nil, fmt.Errorf("failed to parse server URL: %w", err)
+		return nil, fmt.Errorf("failed to parse server URL: %s", err)
 	}
 	host := u.Host
 	if !openapi.MustGenerate(root.API.Servers[0].Meta) || !openapi.MustGenerate(h.Meta) {
@@ -294,11 +294,29 @@ func paramsFromExpr(params *expr.MappedAttributeExpr, path string) []*Parameter 
 func paramsFromHeaders(endpoint *expr.HTTPEndpointExpr) []*Parameter {
 	var params []*Parameter
 
-	expr.WalkMappedAttr(endpoint.Headers, func(name, elem string, att *expr.AttributeExpr) error { // nolint: errcheck
-		required := endpoint.Headers.IsRequiredNoDefault(name)
-		params = append(params, paramFor(att, elem, "header", required))
-		return nil
-	})
+	var (
+		rma = endpoint.Service.Params
+		ma  = endpoint.Headers
+
+		merged *expr.MappedAttributeExpr
+	)
+	{
+		if rma == nil {
+			merged = ma
+		} else if ma == nil {
+			merged = rma
+		} else {
+			merged = expr.DupMappedAtt(rma)
+			merged.Merge(ma)
+		}
+	}
+
+	for _, n := range *expr.AsObject(merged.Type) {
+		header := n.Attribute
+		required := merged.IsRequiredNoDefault(n.Name)
+		p := paramFor(header, merged.ElemName(n.Name), "header", required)
+		params = append(params, p)
+	}
 
 	// Add basic auth to headers
 	if att := expr.TaggedAttribute(endpoint.MethodExpr.Payload, "security:username"); att != "" {
@@ -378,8 +396,8 @@ func responseSpecFromExpr(_ *V2, root *expr.RootExpr, r *expr.HTTPResponseExpr, 
 	var schema *openapi.Schema
 	if mt, ok := r.Body.Type.(*expr.ResultTypeExpr); ok {
 		view := expr.DefaultView
-		if v, ok := r.Body.Meta.Last(expr.ViewMetaKey); ok {
-			view = v
+		if v, ok := r.Body.Meta["view"]; ok {
+			view = v[0]
 		}
 		schema = openapi.NewSchema()
 		schema.Ref = openapi.ResultTypeRefWithPrefix(root.API, mt, view, typeNamePrefix)
