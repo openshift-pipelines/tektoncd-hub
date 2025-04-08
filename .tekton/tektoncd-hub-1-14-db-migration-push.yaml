@@ -16,7 +16,7 @@ metadata:
       ".tekton/tektoncd-hub-1-14-db-migration-push.yaml".pathChanged())
   creationTimestamp: null
   labels:
-    appstudio.openshift.io/application: openshift-pipelines-1-14
+    appstudio.openshift.io/application: openshift-pipelines-core-1-14
     appstudio.openshift.io/component: tektoncd-hub-1-14-db-migration
     pipelines.appstudio.openshift.io/type: build
   name: tektoncd-hub-1-14-db-migration-on-push
