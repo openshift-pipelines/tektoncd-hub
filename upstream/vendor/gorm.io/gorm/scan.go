@@ -131,15 +131,6 @@ func Scan(rows Rows, db *DB, mode ScanMode) {
 		onConflictDonothing = mode&ScanOnConflictDoNothing != 0
 	)
 
-	if len(db.Statement.ColumnMapping) > 0 {
-		for i, column := range columns {
-			v, ok := db.Statement.ColumnMapping[column]
-			if ok {
-				columns[i] = v
-			}
-		}
-	}
-
 	db.RowsAffected = 0
 
 	switch dest := db.Statement.Dest.(type) {
@@ -253,7 +244,7 @@ func Scan(rows Rows, db *DB, mode ScanMode) {
 								rel = rel.FieldSchema.Relationships.Relations[name]
 								relFields = append(relFields, rel.Field)
 							}
-							// latest name is raw dbname
+							// lastest name is raw dbname
 							dbName := names[subNameCount-1]
 							if field := rel.FieldSchema.LookUpField(dbName); field != nil && field.Readable {
 								fields[idx] = field
@@ -340,9 +331,6 @@ func Scan(rows Rows, db *DB, mode ScanMode) {
 			}
 		case reflect.Struct, reflect.Ptr:
 			if initialized || rows.Next() {
-				if mode == ScanInitialized && reflectValue.Kind() == reflect.Struct {
-					db.Statement.ReflectValue.Set(reflect.Zero(reflectValue.Type()))
-				}
 				db.scanIntoStruct(rows, reflectValue, values, fields, joinFields)
 			}
 		default:

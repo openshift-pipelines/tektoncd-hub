@@ -11,7 +11,7 @@
 	{
 	{{- range .Services }}
 		{{- if .Methods }}
-		{{ .VarName }}Svc = {{ $.APIPkg }}.New{{ .StructName }}()
+		{{ .VarName }}Svc = {{ $.APIPkg }}.New{{ .StructName }}(logger)
 		{{- end }}
 	{{- end }}
 	}

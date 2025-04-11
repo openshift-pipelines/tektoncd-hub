@@ -173,7 +173,7 @@ func Error(name string, args ...any) {
 //	}
 func ErrorName(args ...any) {
 	if len(args) == 0 {
-		eval.TooFewArgError()
+		eval.IncompatibleDSL()
 		return
 	}
 	dsl, ok := args[len(args)-1].(func())
@@ -191,8 +191,8 @@ func ErrorName(args ...any) {
 	case string:
 		Attribute(actual, args[1:]...)
 	case int:
-		if len(args) == 2 {
-			eval.TooFewArgError()
+		if len(args) == 1 {
+			eval.IncompatibleDSL()
 			return
 		}
 		name, ok := args[1].(string)
