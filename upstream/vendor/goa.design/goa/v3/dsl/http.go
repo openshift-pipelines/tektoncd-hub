@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -145,7 +146,7 @@ const (
 //	})
 func HTTP(fns ...func()) {
 	if len(fns) > 1 {
-		eval.TooManyArgError()
+		eval.InvalidArgError("zero or one function", fmt.Sprintf("%d functions", len(fns)))
 		return
 	}
 	fn := func() {}
@@ -666,7 +667,6 @@ func Params(args any) {
 // Example:
 //
 //	var ShowPayload = Type("ShowPayload", func() {
-//	    Attribute("parentID", UInt64, "ID of parent account")
 //	    Attribute("id", UInt64, "Account ID")
 //	    Attribute("version", String, "Version", func() {
 //	        Enum("1.0", "2.0")
@@ -675,8 +675,8 @@ func Params(args any) {
 //
 //	var _ = Service("account", func() {
 //	    HTTP(func() {
-//	        Path("/{parentID}") // HTTP request uses ShowPayload "parentID"
-//	        // attribute to define "parentID" parameter.
+//	        Path("/{parentID}")
+//	        Param("parentID", UInt64, "ID of parent account")
 //	    })
 //	    Method("show", func() {  // default response type.
 //	        Payload(ShowPayload)
@@ -743,8 +743,7 @@ func Param(name string, args ...any) {
 //	})
 func MapParams(args ...any) {
 	if len(args) > 1 {
-		eval.TooManyArgError()
-		return
+		eval.ReportError("too many arguments")
 	}
 	e, ok := eval.Current().(*expr.HTTPEndpointExpr)
 	if !ok {
@@ -895,7 +894,7 @@ func SkipResponseBodyEncodeDecode() {
 //	})
 func Body(args ...any) {
 	if len(args) == 0 {
-		eval.TooFewArgError()
+		eval.ReportError("not enough arguments, use Body(name), Body(type), Body(func()) or Body(type, func())")
 		return
 	}
 
@@ -948,10 +947,6 @@ func Body(args ...any) {
 	)
 	switch a := args[0].(type) {
 	case string:
-		if ref == nil {
-			eval.ReportError("Body is set but %s is not defined", kind)
-			return
-		}
 		if !expr.IsObject(ref.Type) {
 			eval.ReportError("%s type must be an object with an attribute with name %#v, got %T", kind, a, ref.Type)
 			return
@@ -963,10 +958,10 @@ func Body(args ...any) {
 		}
 		attr = expr.DupAtt(attr)
 		attr.AddMeta("origin:attribute", a)
-		if rt, ok := attr.Type.(*expr.ResultTypeExpr); ok && expr.IsArray(rt.Type) {
-			// If the attribute type is a result type collection add the type to the
+		if rt, ok := attr.Type.(*expr.ResultTypeExpr); ok {
+			// If the attribute type is a result type add the type to the
 			// GeneratedTypes so that the type's DSLFunc is executed.
-			expr.GeneratedResultTypes.Append(rt)
+			*expr.Root.GeneratedTypes = append(*expr.Root.GeneratedTypes, rt)
 		}
 		if len(args) > 1 {
 			var ok bool

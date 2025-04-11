@@ -9,7 +9,7 @@
 	{{- end }}
 	)
 	{
-		eh := errorHandler(ctx)
+		eh := errorHandler(logger)
 	{{- if needStream .Services }}
 		upgrader := &websocket.Upgrader{}
 	{{- end }}
@@ -20,8 +20,17 @@
 		{{ .Service.VarName }}Server = {{ .Service.PkgName }}svr.New(nil, mux, dec, enc, eh, nil{{ range .FileServers }}, nil{{ end }})
 		{{-  end }}
 	{{- end }}
+	{{- if .Services }}
+		if debug {
+			servers := goahttp.Servers{
+				{{- range $svc := .Services }}
+				{{ .Service.VarName }}Server,
+				{{- end }}
+			}
+			servers.Use(httpmdlwr.Debug(mux, os.Stdout))
+		}
+	{{- end }}
 	}
-
 	// Configure the mux.
 	{{- range .Services }}
 		{{ .Service.PkgName }}svr.Mount(mux, {{ .Service.VarName }}Server)

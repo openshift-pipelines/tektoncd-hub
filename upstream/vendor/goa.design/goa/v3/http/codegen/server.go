@@ -2,7 +2,6 @@ package codegen
 
 import (
 	"fmt"
-	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -33,16 +32,16 @@ func ServerFiles(genpkg string, root *expr.RootExpr) []*codegen.File {
 func serverFile(genpkg string, svc *expr.HTTPServiceExpr) *codegen.File {
 	data := HTTPServices.Get(svc.Name())
 	svcName := data.Service.PathName
-	fpath := filepath.Join(codegen.Gendir, "http", svcName, "server", "server.go")
+	path := filepath.Join(codegen.Gendir, "http", svcName, "server", "server.go")
 	title := fmt.Sprintf("%s HTTP server", svc.Name())
 	funcs := map[string]any{
-		"join":                strings.Join,
-		"hasWebSocket":        hasWebSocket,
-		"isWebSocketEndpoint": isWebSocketEndpoint,
-		"viewedServerBody":    viewedServerBody,
-		"mustDecodeRequest":   mustDecodeRequest,
-		"addLeadingSlash":     addLeadingSlash,
-		"dir":                 path.Dir,
+		"join":                    strings.Join,
+		"hasWebSocket":            hasWebSocket,
+		"isWebSocketEndpoint":     isWebSocketEndpoint,
+		"viewedServerBody":        viewedServerBody,
+		"mustDecodeRequest":       mustDecodeRequest,
+		"addLeadingSlash":         addLeadingSlash,
+		"removeTrailingIndexHTML": removeTrailingIndexHTML,
 	}
 	imports := []*codegen.ImportSpec{
 		{Path: "bufio"},
@@ -87,27 +86,11 @@ func serverFile(genpkg string, svc *expr.HTTPServiceExpr) *codegen.File {
 		sections = append(sections, &codegen.SectionTemplate{Name: "server-handler", Source: readTemplate("server_handler"), Data: e})
 		sections = append(sections, &codegen.SectionTemplate{Name: "server-handler-init", Source: readTemplate("server_handler_init"), FuncMap: funcs, Data: e})
 	}
-	if len(data.FileServers) > 0 {
-		mappedFiles := make(map[string]string)
-		for _, fs := range data.FileServers {
-			if !fs.IsDir {
-				for _, p := range fs.RequestPaths {
-					baseFilePath := "/" + filepath.Base(fs.FilePath)
-					baseRequestPath := "/" + filepath.Base(p)
-					if baseFilePath == baseRequestPath {
-						continue
-					}
-					mappedFiles[baseRequestPath] = baseFilePath
-				}
-			}
-		}
-		sections = append(sections, &codegen.SectionTemplate{Name: "append-fs", Source: readTemplate("append_fs"), FuncMap: funcs, Data: mappedFiles})
-	}
 	for _, s := range data.FileServers {
 		sections = append(sections, &codegen.SectionTemplate{Name: "server-files", Source: readTemplate("file_server"), FuncMap: funcs, Data: s})
 	}
 
-	return &codegen.File{Path: fpath, SectionTemplates: sections}
+	return &codegen.File{Path: path, SectionTemplates: sections}
 }
 
 // serverEncodeDecodeFile returns the file defining the HTTP server encoding and
@@ -267,6 +250,13 @@ func addLeadingSlash(s string) string {
 		return s
 	}
 	return "/" + s
+}
+
+func removeTrailingIndexHTML(s string) string {
+	if strings.HasSuffix(s, "/index.html") {
+		return strings.TrimSuffix(s, "index.html")
+	}
+	return s
 }
 
 func mapQueryDecodeData(dt expr.DataType, varName string, inc int) map[string]any {
