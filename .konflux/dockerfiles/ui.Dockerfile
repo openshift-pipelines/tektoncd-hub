@@ -26,7 +26,7 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
 ENV BASE_PATH="/opt/app-root/src"
-ARG VERSION=hub-ui-1.14.6
+ARG VERSION=hub-ui-1.15.3
 
 USER root
 RUN chmod ugo+rw /opt/app-root/src/config.js && \
