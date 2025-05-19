@@ -1,6 +1,6 @@
 # --- builder image
-ARG NODEJS_BUILDER=registry.redhat.io/ubi9/nodejs-18@sha256:5977f1ca969431c7025715fb81557f14d35d39b6d06bc4895e36619399ba7fe4
-ARG RUNTIME=registry.redhat.io/ubi9/nginx-124@sha256:6465906193329d883dfe2de4077e5618420fa39885107f6dacd87fe00629ef4c
+ARG NODEJS_BUILDER=registry.redhat.io/ubi9/nodejs-18@sha256:a3092e7291b27e52fa20374ac12020c7d360d79c7f6b2baa6730563f22c4bea4
+ARG RUNTIME=registry.redhat.io/ubi9/nginx-124@sha256:7acbb277f6922c47e55b5f65c39d7352e58de3dc6ecc2a7259011c88bf4d2249
 
 FROM $NODEJS_BUILDER AS builder
 
@@ -27,7 +27,7 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
 ENV BASE_PATH="/opt/app-root/src"
-ARG VERSION=hub-1.18
+ARG VERSION=hub-1.18-1
 
 USER root
 RUN chmod ugo+rw /opt/app-root/src/config.js && \
