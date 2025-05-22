@@ -1,6 +1,6 @@
 # --- builder image
-ARG NODEJS_BUILDER=registry.access.redhat.com/ubi9/nodejs-18@sha256:647da5299a2e15900b40dae5b3181d116cc7eb0be93c856dc2f47d20ce891f48
-ARG RUNTIME=registry.access.redhat.com/ubi9/nginx-124@sha256:e73b92e682108cafd247be56a64e8b5f0c906c6033c9740325cf8ff7c47320c9
+ARG NODEJS_BUILDER=registry.access.redhat.com/ubi8/nodejs-18@sha256:1a109c7d4a268e897a22b87f505eef326864f5ff74d4e2b7f0706605c9c5aba5
+ARG RUNTIME=registry.access.redhat.com/ubi8/nginx-124@sha256:b02afddd2dd7d754bda1226fe3141f4b934f1e2fab3a1ed1ddc9bd476a8ee3e6
 
 FROM $NODEJS_BUILDER AS builder
 
@@ -26,7 +26,7 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
 ENV BASE_PATH="/opt/app-root/src"
-ARG VERSION=hub-next
+ARG VERSION=hub-ui-1.16.4
 
 USER root
 RUN dnf install -y openssl-libs && \
@@ -46,7 +46,7 @@ CMD /usr/bin/start.sh
 
 LABEL \
     com.redhat.component="openshift-pipelines-hub-ui-container" \
-    name="openshift-pipelines/pipelines-hub-ui-rhel9" \
+    name="openshift-pipelines/pipelines-hub-ui-rhel8" \
     version=$VERSION \
     summary="Red Hat OpenShift Pipelines Hub UI" \
     maintainer="pipelines-extcomm@redhat.com" \

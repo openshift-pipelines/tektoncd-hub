@@ -1,5 +1,5 @@
 ARG GO_BUILDER=brew.registry.redhat.io/rh-osbs/openshift-golang-builder:v1.23
-ARG RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:e1c4703364c5cb58f5462575dc90345bcd934ddc45e6c32f9c162f2b5617681c
+ARG RUNTIME=registry.access.redhat.com/ubi8/ubi:latest@sha256:244e9858f9d8a2792a3dceb850b4fa8fdbd67babebfde42587bfa919d5d1ecef
 
 FROM $GO_BUILDER AS builder
 
@@ -15,7 +15,7 @@ RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vend
     ./api/cmd/db
 
 FROM $RUNTIME
-ARG VERSION=hub-next
+ARG VERSION=hub-db-migration-1.16.4
 
 COPY --from=builder /tmp/hub-db-migration /ko-app/hub-db-migration
 COPY head ${KO_DATA_PATH}/HEAD
@@ -24,7 +24,7 @@ EXPOSE 8000
 
 LABEL \
     com.redhat.component="openshift-pipelines-hub-db-migration-container" \
-    name="openshift-pipelines/pipelines-hub-db-migration-rhel9" \
+    name="openshift-pipelines/pipelines-hub-db-migration-rhel8" \
     version=$VERSION \
     summary="Red Hat OpenShift Pipelines Hub DB Migration" \
     maintainer="pipelines-extcomm@redhat.com" \
