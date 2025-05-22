@@ -42,6 +42,8 @@ spec:
       [{"type": "npm", "path": "upstream/ui"}, {"type": "rpm", "path": ".konflux/rpms"}]
   pipelineRef:
     name: docker-build-ta
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-tektoncd-hub-next-ui
   workspaces:
   - name: git-auth
     secret:
