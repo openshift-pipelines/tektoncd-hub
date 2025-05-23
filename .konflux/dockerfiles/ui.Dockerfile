@@ -29,10 +29,6 @@ ENV BASE_PATH="/opt/app-root/src"
 ARG VERSION=hub-ui-1.16.4
 
 USER root
-RUN dnf install -y openssl-libs && \
-    dnf install -y libxml2 && \
-    dnf install -y openssl
-
 RUN chmod ugo+rw /opt/app-root/src/config.js && \
     chown nginx:nginx /opt/app-root/src/config.js && \
     chmod +x /usr/bin/start.sh

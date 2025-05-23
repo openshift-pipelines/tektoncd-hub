@@ -15,6 +15,7 @@ RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vend
     ./api/cmd/api
 
 FROM $RUNTIME
+
 ARG VERSION=hub-api-1.16.4
 
 COPY --from=builder /tmp/hub-api-server /ko-app/hub-api-server
