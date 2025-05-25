@@ -25,7 +25,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tektoncd/pipeline v0.68.1
-	github.com/tektoncd/plumbing v0.0.0-20220817140952-3da8ce01aeeb
+	github.com/tektoncd/plumbing bd285d235f66
 	go.uber.org/automaxprocs v1.6.0
 	go.uber.org/zap v1.27.0
 	goa.design/goa/v3 v3.19.1
