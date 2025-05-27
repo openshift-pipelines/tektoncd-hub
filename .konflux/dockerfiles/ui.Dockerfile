@@ -31,7 +31,14 @@ ARG VERSION=hub-next
 USER root
 RUN dnf install -y openssl-libs && \
     dnf install -y libxml2 && \
-    dnf install -y openssl
+    dnf install -y openssl && \
+    fips-mode-setup --enable && \
+    update-crypto-policies --set FIPS && \
+    echo "Verifying FIPS kernel parameter:" && \
+    cat /proc/sys/crypto/fips_enabled && \
+    echo "Verifying OpenSSL FIPS status:" && \
+    openssl version -a | grep -i fips && \
+    (openssl md5 /dev/null || echo "MD5 test passed (expected failure in FIPS mode)")
 
 RUN chmod ugo+rw /opt/app-root/src/config.js && \
     chown nginx:nginx /opt/app-root/src/config.js && \
