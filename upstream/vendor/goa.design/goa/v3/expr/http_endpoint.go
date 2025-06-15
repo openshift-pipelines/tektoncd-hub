@@ -131,6 +131,9 @@ func (e *HTTPEndpointExpr) PathParams() *MappedAttributeExpr {
 	for _, r := range e.Routes {
 		for _, p := range r.Params() {
 			att := pat.Find(p)
+			if att == nil {
+				continue
+			}
 			obj.Set(p, att)
 			if e.Params.IsRequired(p) {
 				v.AddRequired(p)
@@ -737,7 +740,7 @@ func (e *HTTPEndpointExpr) validateParams() *eval.ValidationErrors {
 	// We have to figure out the actual type for the params because the actual
 	// type is initialized only during the finalize phase. In the validation
 	// phase, all param types are string type by default unless specified
-	// expliclty.
+	// explicitly.
 	initAttr(pparams, e.MethodExpr.Payload)
 	initAttr(qparams, e.MethodExpr.Payload)
 
@@ -875,7 +878,7 @@ func (e *HTTPEndpointExpr) validateHeadersAndCookies() *eval.ValidationErrors {
 
 // EvalName returns the generic definition name used in error messages.
 func (r *RouteExpr) EvalName() string {
-	return fmt.Sprintf(`route %s "%s" of %s`, r.Method, r.Path, r.Endpoint.EvalName())
+	return fmt.Sprintf(`route %s %q of %s`, r.Method, r.Path, r.Endpoint.EvalName())
 }
 
 // Validate validates a route expression by ensuring that the route parameters
