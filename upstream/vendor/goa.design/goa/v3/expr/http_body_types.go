@@ -128,6 +128,9 @@ func httpRequestBody(a *HTTPEndpointExpr) *AttributeExpr {
 	if a.Body != nil {
 		a.Body = DupAtt(a.Body)
 		renameType(a.Body, name, suffix)
+		if ut, ok := a.Body.Type.(*UserTypeExpr); ok {
+			ut.UID = a.Service.Name() + "#" + name
+		}
 		return a.Body
 	}
 
@@ -189,10 +192,15 @@ func httpRequestBody(a *HTTPEndpointExpr) *AttributeExpr {
 	}
 	appendSuffix(ut.Attribute().Type, suffix)
 
-	// Remember openapi typename for example to generate friendly OpenAPI specs.
 	if t, ok := payload.Type.(UserType); ok {
+		// Remember openapi typename for example to generate friendly OpenAPI specs.
 		if m, ok := t.Attribute().Meta["openapi:typename"]; ok {
 			ut.AttributeExpr.AddMeta("openapi:typename", m...)
+		}
+
+		// Remember additionalProperties.
+		if m, ok := t.Attribute().Meta["openapi:additionalProperties"]; ok {
+			ut.AttributeExpr.AddMeta("openapi:additionalProperties", m...)
 		}
 	}
 
@@ -222,7 +230,7 @@ func httpStreamingBody(e *HTTPEndpointExpr) *AttributeExpr {
 	ut := &UserTypeExpr{
 		AttributeExpr: DupAtt(att),
 		TypeName:      concat(e.Name(), "Streaming", "Body"),
-		UID:           concat(e.Service.Name(), e.Name(), "Streaming", "Body"),
+		UID:           e.Service.Name() + "#" + e.Name() + "StreamingBody",
 	}
 	appendSuffix(ut.Attribute().Type, suffix)
 
@@ -282,6 +290,12 @@ func buildHTTPResponseBody(name string, attr *AttributeExpr, resp *HTTPResponseE
 		}
 		att := DupAtt(resp.Body)
 		renameType(att, name, suffix)
+		if ut, ok := att.Type.(*UserTypeExpr); ok {
+			ut.UID = svc.Name() + "#" + name
+		}
+		if rt, ok := att.Type.(*ResultTypeExpr); ok {
+			rt.UID = svc.Name() + "#" + name
+		}
 		return att
 	}
 
@@ -325,12 +339,17 @@ func buildHTTPResponseBody(name string, attr *AttributeExpr, resp *HTTPResponseE
 		UID:           concat(svc.Name(), "#", name),
 	}
 
-	// Remember original type name and openapi typename for example
-	// to generate friendly OpenAPI specs.
 	if t, ok := attr.Type.(UserType); ok {
+		// Remember original type name and openapi typename for example
+		// to generate friendly OpenAPI specs.
 		userType.AttributeExpr.AddMeta("name:original", t.Name())
 		if m, ok := t.Attribute().Meta["openapi:typename"]; ok {
 			userType.AttributeExpr.AddMeta("openapi:typename", m...)
+		}
+
+		// Remember additionalProperties.
+		if m, ok := t.Attribute().Meta["openapi:additionalProperties"]; ok {
+			userType.AttributeExpr.AddMeta("openapi:additionalProperties", m...)
 		}
 	}
 
@@ -426,6 +445,7 @@ func concat(strs ...string) string {
 }
 
 func renameType(att *AttributeExpr, name, suffix string) {
+	RemovePkgPath(att)
 	rt := att.Type
 	switch rtt := rt.(type) {
 	case UserType:
@@ -480,7 +500,7 @@ func removeAttribute(attr *MappedAttributeExpr, name string) {
 	}
 }
 
-// extendedBodyAttribute returns an attribute describing the HTTP
+// extendBodyAttribute returns an attribute describing the HTTP
 // request/response body type by merging any Bases and References to the parent
 // attribute. This must be invoked during validation or to determine the actual
 // body type by removing any headers/params/cookies.

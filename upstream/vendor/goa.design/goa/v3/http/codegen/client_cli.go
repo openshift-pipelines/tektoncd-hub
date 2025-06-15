@@ -24,7 +24,7 @@ type subcommandData struct {
 	// MultipartFuncName is the name of the function used to render a multipart
 	// request encoder.
 	MultipartFuncName string
-	// MultipartFuncName is the name of the variabl used to render a multipart
+	// MultipartFuncName is the name of the variable used to render a multipart
 	// request encoder.
 	MultipartVarName string
 	// StreamFlag is the flag used to identify the file to be streamed when
@@ -87,7 +87,7 @@ func buildSubcommandData(sd *ServiceData, e *EndpointData) *subcommandData {
 	flags, buildFunction := buildFlags(sd, e)
 
 	sub := &subcommandData{
-		SubcommandData: cli.BuildSubcommandData(sd.Service.Name, e.Method, buildFunction, flags),
+		SubcommandData: cli.BuildSubcommandData(sd.Service, e.Method, buildFunction, flags),
 	}
 	if e.MultipartRequestEncoder != nil {
 		sub.MultipartVarName = e.MultipartRequestEncoder.VarName
@@ -127,6 +127,13 @@ func endpointParser(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr, da
 			Path: genpkg + "/http/" + sd.Service.PathName + "/client",
 			Name: sd.Service.PkgName + "c",
 		})
+		// Add interceptors import if service has client interceptors
+		if len(sd.Service.ClientInterceptors) > 0 {
+			specs = append(specs, &codegen.ImportSpec{
+				Path: genpkg + "/" + sd.Service.PathName,
+				Name: sd.Service.PkgName,
+			})
+		}
 	}
 
 	cliData := make([]*cli.CommandData, len(data))
@@ -140,7 +147,7 @@ func endpointParser(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr, da
 		cli.UsageExamples(cliData),
 		{
 			Name:   "parse-endpoint",
-			Source: parseEndpointT,
+			Source: readTemplate("parse_endpoint"),
 			Data: struct {
 				FlagsCode string
 				Commands  []*commandData
@@ -291,71 +298,3 @@ func streamingCmdExists(data []*commandData) bool {
 	}
 	return false
 }
-
-const parseEndpointT = `// ParseEndpoint returns the endpoint and payload as specified on the command
-// line.
-func ParseEndpoint(
-	scheme, host string,
-	doer goahttp.Doer,
-	enc func(*http.Request) goahttp.Encoder,
-	dec func(*http.Response) goahttp.Decoder,
-	restore bool,
-	{{- if streamingCmdExists .Commands }}
-	dialer goahttp.Dialer,
-		{{- range .Commands }}
-			{{- if .NeedStream }}
-				{{ .VarName }}Configurer *{{ .PkgName }}.ConnConfigurer,
-			{{- end }}
-		{{- end }}
-	{{- end }}
-	{{- range $c := .Commands }}
-	{{- range .Subcommands }}
-		{{- if .MultipartVarName }}
-	{{ .MultipartVarName }} {{ $c.PkgName }}.{{ .MultipartFuncName }},
-		{{- end }}
-	{{- end }}
-	{{- end }}
-) (goa.Endpoint, any, error) {
-	{{ .FlagsCode }}
-    var (
-		data     any
-		endpoint goa.Endpoint
-		err      error
-	)
-	{
-		switch svcn {
-	{{- range .Commands }}
-		case "{{ .Name }}":
-			c := {{ .PkgName }}.NewClient(scheme, host, doer, enc, dec, restore{{ if .NeedStream }}, dialer, {{ .VarName }}Configurer{{ end }})
-			switch epn {
-		{{- $pkgName := .PkgName }}{{ range .Subcommands }}
-			case "{{ .Name }}":
-				endpoint = c.{{ .MethodVarName }}({{ if .MultipartVarName }}{{ .MultipartVarName }}{{ end }})
-			{{- if .BuildFunction }}
-				data, err = {{ $pkgName}}.{{ .BuildFunction.Name }}({{ range .BuildFunction.ActualParams }}*{{ . }}Flag, {{ end }})
-			{{- else if .Conversion }}
-				{{ .Conversion }}
-			{{- else }}
-				data = nil
-			{{- end }}
-			{{- if .StreamFlag }}
-				{{- if .BuildFunction }}
-				if err == nil {
-				{{- end }}
-					data, err = {{ $pkgName }}.{{ .BuildStreamPayload }}({{ if or .BuildFunction .Conversion }}data, {{ end }}*{{ .StreamFlag.FullName }}Flag)
-				{{- if .BuildFunction }}
-				}
-				{{- end }}
-			{{- end }}
-		{{- end }}
-			}
-	{{- end }}
-		}
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return endpoint, data, nil
-}
-`

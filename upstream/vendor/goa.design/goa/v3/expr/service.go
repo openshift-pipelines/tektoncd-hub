@@ -1,6 +1,7 @@
 package expr
 
 import (
+	"errors"
 	"fmt"
 
 	"goa.design/goa/v3/eval"
@@ -26,6 +27,10 @@ type (
 		// potentially multiple schemes. Incoming requests must validate
 		// at least one requirement to be authorized.
 		Requirements []*SecurityExpr
+		// ClientInterceptors is the list of client interceptors.
+		ClientInterceptors []*InterceptorExpr
+		// ServerInterceptors is the list of server interceptors.
+		ServerInterceptors []*InterceptorExpr
 		// Meta is a set of key/value pairs with semantic that is
 		// specific to each generator.
 		Meta MetaExpr
@@ -80,7 +85,8 @@ func (s *ServiceExpr) Validate() error {
 	verr := new(eval.ValidationErrors)
 	for _, e := range s.Errors {
 		if err := e.Validate(); err != nil {
-			if verrs, ok := err.(*eval.ValidationErrors); ok {
+			var verrs *eval.ValidationErrors
+			if errors.As(err, &verrs) {
 				verr.Merge(verrs)
 			}
 		}

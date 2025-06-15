@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gohugoio/hashstructure"
+
 	"goa.design/goa/v3/codegen"
 	"goa.design/goa/v3/expr"
 	"goa.design/goa/v3/http/codegen/openapi"
@@ -78,13 +80,13 @@ func buildBodyTypes(api *expr.APIExpr) (map[string]map[string]*EndpointBodies, m
 	}
 
 	for _, s := range api.HTTP.Services {
-		if !mustGenerate(s.Meta) || !mustGenerate(s.ServiceExpr.Meta) {
+		if !openapi.MustGenerate(s.Meta) || !openapi.MustGenerate(s.ServiceExpr.Meta) {
 			continue
 		}
 
 		sbodies := make(map[string]*EndpointBodies, len(s.HTTPEndpoints))
 		for _, e := range s.HTTPEndpoints {
-			if !mustGenerate(e.Meta) || !mustGenerate(e.MethodExpr.Meta) {
+			if !openapi.MustGenerate(e.Meta) || !openapi.MustGenerate(e.MethodExpr.Meta) {
 				continue
 			}
 
@@ -117,8 +119,8 @@ func buildBodyTypes(api *expr.APIExpr) (map[string]map[string]*EndpointBodies, m
 			}
 			for _, resp := range resps {
 				var view string
-				if vs, ok := resp.Body.Meta["view"]; ok {
-					view = vs[0]
+				if v, ok := resp.Body.Meta.Last(expr.ViewMetaKey); ok {
+					view = v
 				}
 				body := resp.Body
 				if view != "" {
@@ -152,12 +154,12 @@ func (sf *schemafier) schemafy(attr *expr.AttributeExpr, noref ...bool) *openapi
 	switch t := attr.Type.(type) {
 	case expr.Primitive:
 		switch t.Kind() {
-		case expr.UIntKind, expr.UInt64Kind, expr.UInt32Kind:
-			s.Type = openapi.Type("integer")
-		case expr.IntKind, expr.Int64Kind:
+		case expr.IntKind, expr.UIntKind, expr.Int64Kind, expr.UInt64Kind:
+			// Use int64 format for IntKind and UIntKind because the OpenAPI
+			// generator produced int32 by default.
 			s.Type = openapi.Type("integer")
 			s.Format = "int64"
-		case expr.Int32Kind:
+		case expr.Int32Kind, expr.UInt32Kind:
 			s.Type = openapi.Type("integer")
 			s.Format = "int32"
 		case expr.Float32Kind:
@@ -166,7 +168,7 @@ func (sf *schemafier) schemafy(attr *expr.AttributeExpr, noref ...bool) *openapi
 		case expr.Float64Kind:
 			s.Type = openapi.Type("number")
 			s.Format = "double"
-		case expr.BytesKind, expr.AnyKind:
+		case expr.BytesKind:
 			if bases := attr.Bases; len(bases) > 0 {
 				for _, b := range bases {
 					// Union type
@@ -177,6 +179,10 @@ func (sf *schemafier) schemafy(attr *expr.AttributeExpr, noref ...bool) *openapi
 				s.Type = openapi.Type("string")
 				s.Format = "binary"
 			}
+		case expr.AnyKind:
+			// A schema without a type matches any data type.
+			// See https://swagger.io/docs/specification/data-models/data-types/#any.
+			s.Type = openapi.Type("")
 		default:
 			s.Type = openapi.Type(t.Name())
 		}
@@ -187,7 +193,7 @@ func (sf *schemafier) schemafy(attr *expr.AttributeExpr, noref ...bool) *openapi
 		s.Type = openapi.Object
 		var itemNotes []string
 		for _, nat := range *t {
-			if !mustGenerate(nat.Attribute.Meta) {
+			if !openapi.MustGenerate(nat.Attribute.Meta) {
 				continue
 			}
 			s.Properties[nat.Name] = sf.schemafy(nat.Attribute)
@@ -260,6 +266,9 @@ func (sf *schemafier) schemafy(attr *expr.AttributeExpr, noref ...bool) *openapi
 	s.Extensions = openapi.ExtensionsFromExpr(attr.Meta)
 
 	// Validations
+	if ap := openapi.AdditionalPropertiesFromExpr(attr.Meta); ap != nil {
+		s.AdditionalProperties = ap
+	}
 	val := attr.Validation
 	if val == nil {
 		return s
@@ -295,7 +304,14 @@ func (sf *schemafier) schemafy(attr *expr.AttributeExpr, noref ...bool) *openapi
 			s.MaxLength = val.MaxLength
 		}
 	}
-	s.Required = val.Required
+	for _, v := range val.Required {
+		if a := attr.Find(v); a != nil {
+			if !openapi.MustGenerate(a.Meta) {
+				continue
+			}
+		}
+		s.Required = append(s.Required, v)
+	}
 
 	return s
 }
@@ -365,7 +381,7 @@ func toString(val any) string {
 // identifiers. Structurally identical means same primitive types, arrays with
 // structurally equivalent element types, maps with structurally equivalent key
 // and value types or object with identical attribute names and structurally
-// equivalent types and identical set of required attributes.
+// equivalent types and identical set of validation rules.
 func (*schemafier) hashAttribute(att *expr.AttributeExpr, h hash.Hash64) uint64 {
 	return *hashAttribute(att, h, make(map[string]*uint64))
 }
@@ -382,36 +398,38 @@ func hashAttribute(att *expr.AttributeExpr, h hash.Hash64, seen map[string]*uint
 	}
 	seen[t.Hash()] = res
 
+	hv := hashValidation(att.Validation, h)
 	switch t.Kind() {
 	case expr.ObjectKind:
 		o := expr.AsObject(t)
 		for _, m := range *o {
-			if !mustGenerate(m.Attribute.Meta) {
+			if !openapi.MustGenerate(m.Attribute.Meta) {
 				continue
 			}
 			kh := hashString(m.Name, h)
 			vh := hashAttribute(m.Attribute, h, seen)
 			*res = *res ^ orderedHash(kh, *vh, h)
 		}
-		// Objects with a different set of required attributes should produce
-		// different hashes.
-		if att.Validation != nil {
-			for _, req := range att.Validation.Required {
-				rh := hashString(req, h)
-				*res = *res ^ rh
-			}
+		if hv != 0 {
+			*res = orderedHash(*res, hv, h)
 		}
 
 	case expr.ArrayKind:
 		kh := hashString("[]", h)
 		vh := hashAttribute(expr.AsArray(t).ElemType, h, seen)
 		*res = orderedHash(kh, *vh, h)
+		if hv != 0 {
+			*res = orderedHash(*res, hv, h)
+		}
 
 	case expr.MapKind:
 		m := expr.AsMap(t)
 		kh := hashAttribute(m.KeyType, h, seen)
 		vh := hashAttribute(m.ElemType, h, seen)
 		*res = orderedHash(*kh, *vh, h)
+		if hv != 0 {
+			*res = orderedHash(*res, hv, h)
+		}
 
 	case expr.UserTypeKind:
 		*res = *hashAttribute(t.(expr.UserType).Attribute(), h, seen)
@@ -421,14 +439,37 @@ func hashAttribute(att *expr.AttributeExpr, h hash.Hash64, seen map[string]*uint
 		// the computation of the hash.
 		rt := t.(*expr.ResultTypeExpr)
 		*res = hashString(rt.Identifier, h)
-		if view := rt.AttributeExpr.Meta["view"]; len(view) > 0 {
-			*res = orderedHash(*res, hashString(view[0], h), h)
+		if view, ok := rt.AttributeExpr.Meta.Last(expr.ViewMetaKey); ok {
+			*res = orderedHash(*res, hashString(view, h), h)
 		}
 
 	default: // Primitives or Any
 		*res = hashString(t.Name(), h)
+		if hv != 0 {
+			*res = orderedHash(*res, hv, h)
+		}
 	}
 
+	return res
+}
+
+func hashValidation(val *expr.ValidationExpr, h hash.Hash64) uint64 {
+	// Note: we can't use hashstructure for attributes because it doesn't
+	// handle recursive structures.
+	if val == nil {
+		return 0
+	}
+
+	res, err := hashstructure.Hash(val, &hashstructure.HashOptions{
+		Hasher:          h,
+		ZeroNil:         false,
+		IgnoreZeroValue: true,
+		SlicesAsSets:    true,
+	})
+	if err != nil {
+		// should really never happen (OOM maybe)
+		return 0
+	}
 	return res
 }
 

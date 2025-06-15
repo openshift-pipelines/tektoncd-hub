@@ -9,7 +9,10 @@ import (
 )
 
 // Root is the root object built by the DSL.
-var Root = &RootExpr{GeneratedTypes: &GeneratedRoot{}}
+var Root = new(RootExpr)
+
+// DefaultProtoc is the default command to be invoked for generating code from protobuf schemas.
+const DefaultProtoc = "protoc"
 
 type (
 	// RootExpr is the struct built by the DSL on process start.
@@ -18,16 +21,16 @@ type (
 		API *APIExpr
 		// Services contains the list of services exposed by the API.
 		Services []*ServiceExpr
+		// Interceptors contains the list of interceptors.
+		Interceptors []*InterceptorExpr
 		// Errors contains the list of errors returned by all the API
 		// methods.
 		Errors []*ErrorExpr
 		// Types contains the user types described in the DSL.
 		Types []UserType
-		// ResultTypes contains the result types described in the DSL.
-		ResultTypes []UserType
-		// GeneratedTypes contains the types generated during DSL
+		// ResultTypes contains the result types generated during DSL
 		// execution.
-		GeneratedTypes *GeneratedRoot
+		ResultTypes []*ResultTypeExpr
 		// Conversions list the user type to external type mappings.
 		Conversions []*TypeMap
 		// Creations list the external type to user type mappings.
@@ -72,12 +75,14 @@ func (r *RootExpr) WalkSets(walk eval.SetWalker) {
 	}
 	walk(types)
 
-	// Result types
-	mtypes := make(eval.ExpressionSet, len(r.ResultTypes))
-	for i, mt := range r.ResultTypes {
-		mtypes[i] = mt.(*ResultTypeExpr)
+	// Result types, note: initialized when the generated result types are
+	// walked so empty the first time around (in the first pass DSL
+	// execution). See ResultTypesRoot.WalkSets for details.
+	rtypes := make(eval.ExpressionSet, len(r.ResultTypes))
+	for i, rt := range r.ResultTypes {
+		rtypes[i] = rt
 	}
-	walk(mtypes)
+	walk(rtypes)
 
 	// Services
 	walk(eval.ToExpressionSet(r.Services))
@@ -152,18 +157,6 @@ func (r *RootExpr) UserType(name string) UserType {
 	for _, t := range r.ResultTypes {
 		if t.Name() == name {
 			return t
-		}
-	}
-	return nil
-}
-
-// GeneratedResultType returns the generated result type expression with the given
-// id, nil if there isn't one.
-func (r *RootExpr) GeneratedResultType(id string) *ResultTypeExpr {
-	for _, t := range *r.GeneratedTypes {
-		mt := t.(*ResultTypeExpr)
-		if mt.Identifier == id {
-			return mt
 		}
 	}
 	return nil

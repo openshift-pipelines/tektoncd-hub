@@ -213,8 +213,7 @@ func ConvertFile(root *expr.RootExpr, service *expr.ServiceExpr) (*codegen.File,
 	}
 
 	// Build header section
-	pkgs = append(pkgs, &codegen.ImportSpec{Path: "context"})
-	pkgs = append(pkgs, codegen.GoaImport(""))
+	pkgs = append(pkgs, &codegen.ImportSpec{Path: "context"}, codegen.GoaImport(""))
 	path := filepath.Join(codegen.Gendir, codegen.SnakeCase(service.Name), "convert.go")
 	sections := []*codegen.SectionTemplate{
 		codegen.Header(service.Name+" service type conversion functions", svc.PkgName, pkgs),
@@ -238,8 +237,10 @@ func ConvertFile(root *expr.RootExpr, service *expr.ServiceExpr) (*codegen.File,
 		srcCtx := typeContext("", svc.Scope)
 		tgtCtx := codegen.NewAttributeContext(false, false, false, tgtPkg, codegen.NewNameScope())
 		srcAtt := &expr.AttributeExpr{Type: c.User}
+		tgtAtt := &expr.AttributeExpr{Type: dt}
+		tgtAtt.AddMeta("struct:type:name", dt.Name()) // Used by transformer to generate the correct type name.
 		code, tf, err := codegen.GoTransform(
-			&expr.AttributeExpr{Type: c.User}, &expr.AttributeExpr{Type: dt},
+			srcAtt, tgtAtt,
 			"t", "v", srcCtx, tgtCtx, "transform", true)
 		if err != nil {
 			return nil, err
@@ -260,7 +261,7 @@ func ConvertFile(root *expr.RootExpr, service *expr.ServiceExpr) (*codegen.File,
 		}
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "convert-to",
-			Source: convertT,
+			Source: readTemplate("convert"),
 			Data:   data,
 		})
 	}
@@ -298,7 +299,7 @@ func ConvertFile(root *expr.RootExpr, service *expr.ServiceExpr) (*codegen.File,
 		}
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "create-from",
-			Source: createT,
+			Source: readTemplate("create"),
 			Data:   data,
 		})
 	}
@@ -312,7 +313,7 @@ func ConvertFile(root *expr.RootExpr, service *expr.ServiceExpr) (*codegen.File,
 		seen[tf.Name] = struct{}{}
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "convert-create-helper",
-			Source: transformHelperT,
+			Source: readTemplate("transform_helper"),
 			Data:   tf,
 		})
 	}
@@ -355,7 +356,7 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 	// check compatibility
 	if ref != nil {
 		if err := compatible(ref, t); err != nil {
-			return fmt.Errorf("%q: %s", t.Name(), err)
+			return fmt.Errorf("%q: %w", t.Name(), err)
 		}
 	}
 
@@ -415,7 +416,7 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 		}
 		var elem expr.DataType
 		if err := buildDesignType(&elem, e, eref, appendPath(rec, "[0]")); err != nil {
-			return fmt.Errorf("%s", err)
+			return fmt.Errorf("%w", err)
 		}
 		*dt = &expr.Array{ElemType: &expr.AttributeExpr{Type: elem}}
 
@@ -428,11 +429,11 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 		}
 		var kt expr.DataType
 		if err := buildDesignType(&kt, t.Key(), kref, appendPath(rec, ".key")); err != nil {
-			return fmt.Errorf("%s", err)
+			return fmt.Errorf("%w", err)
 		}
 		var vt expr.DataType
 		if err := buildDesignType(&vt, t.Elem(), vref, appendPath(rec, ".value")); err != nil {
-			return fmt.Errorf("%s", err)
+			return fmt.Errorf("%w", err)
 		}
 		*dt = &expr.Map{KeyType: &expr.AttributeExpr{Type: kt}, ElemType: &expr.AttributeExpr{Type: vt}}
 
@@ -486,7 +487,7 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 			var fdt expr.DataType
 			if f.Type.Kind() == reflect.Ptr {
 				if err := buildDesignType(&fdt, f.Type.Elem(), aref, recf); err != nil {
-					return fmt.Errorf("%q.%s: %s", t.Name(), f.Name, err)
+					return fmt.Errorf("%q.%s: %w", t.Name(), f.Name, err)
 				}
 				if expr.IsArray(fdt) {
 					return fmt.Errorf("%s: field of type pointer to slice are not supported, use slice instead", rec.path)
@@ -501,7 +502,7 @@ func buildDesignType(dt *expr.DataType, t reflect.Type, ref expr.DataType, recs 
 					required = append(required, atn)
 				}
 				if err := buildDesignType(&fdt, f.Type, aref, appendPath(rec, "."+f.Name)); err != nil {
-					return fmt.Errorf("%q.%s: %s", t.Name(), f.Name, err)
+					return fmt.Errorf("%q.%s: %w", t.Name(), f.Name, err)
 				}
 			}
 			name := atn
@@ -696,24 +697,22 @@ func compatible(from expr.DataType, to reflect.Type, recs ...compRec) error {
 				ok    bool
 				field reflect.StructField
 			)
-			{
-				if ef, k := nat.Attribute.Meta["struct:field:external"]; k {
-					fname = ef[0]
-					if fname == "-" {
-						continue
-					}
-					field, ok = to.FieldByName(ef[0])
-				} else if ef, k := nat.Attribute.Meta["struct.field.external"]; k { // Deprecated syntax. Only present for backward compatibility.
-					fname = ef[0]
-					if fname == "-" {
-						continue
-					}
-					field, ok = to.FieldByName(ef[0])
-				} else {
-					ef := codegen.Goify(ma.ElemName(nat.Name), true)
-					fname = ef
-					field, ok = to.FieldByName(ef)
+			if ef, k := nat.Attribute.Meta["struct:field:external"]; k {
+				fname = ef[0]
+				if fname == "-" {
+					continue
 				}
+				field, ok = to.FieldByName(ef[0])
+			} else if ef, k := nat.Attribute.Meta["struct.field.external"]; k { // Deprecated syntax. Only present for backward compatibility.
+				fname = ef[0]
+				if fname == "-" {
+					continue
+				}
+				field, ok = to.FieldByName(ef[0])
+			} else {
+				ef := codegen.Goify(ma.ElemName(nat.Name), true)
+				fname = ef
+				field, ok = to.FieldByName(ef)
 			}
 			if !ok {
 				return fmt.Errorf("types don't match: could not find field %q of external type %q matching attribute %q of type %q",
@@ -743,27 +742,3 @@ func compatible(from expr.DataType, to reflect.Type, recs ...compRec) error {
 
 	return fmt.Errorf("types don't match: type of %s is %s but type of corresponding attribute is %s", rec.path, toName, from.Name())
 }
-
-// input: convertData
-const convertT = `{{ printf "%s creates an instance of %s initialized from t." .Name .TypeName | comment }}
-func (t {{ .ReceiverTypeRef }}) {{ .Name }}() {{ .TypeRef }} {
-    {{ .Code }}
-    return v
-}
-`
-
-// input: convertData
-const createT = `{{ printf "%s initializes t from the fields of v" .Name | comment }}
-func (t {{ .ReceiverTypeRef }}) {{ .Name }}(v {{ .TypeRef }}) {
-	{{ .Code }}
-	*t = *temp
-}
-`
-
-// input: TransformFunctionData
-const transformHelperT = `{{ printf "%s builds a value of type %s from a value of type %s." .Name .ResultTypeRef .ParamTypeRef | comment }}
-func {{ .Name }}(v {{ .ParamTypeRef }}) {{ .ResultTypeRef }} {
-        {{ .Code }}
-        return res
-}
-`
