@@ -26,13 +26,10 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
 ENV BASE_PATH="/opt/app-root/src"
-ARG VERSION=hub-1.19
+ARG VERSION=hub-ui-1.19.0
 
 USER root
-RUN dnf install -y openssl-libs && \
-    dnf install -y libxml2 && \
-    dnf install -y openssl && \
-    fips-mode-setup --enable && \
+RUN fips-mode-setup --enable && \
     update-crypto-policies --set FIPS && \
     echo "Verifying FIPS kernel parameter:" && \
     cat /proc/sys/crypto/fips_enabled && \
