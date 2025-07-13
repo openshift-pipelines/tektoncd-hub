@@ -18,6 +18,7 @@ package spanner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -71,8 +72,20 @@ const (
 	// has opted-in for the creation of trace spans on the Spanner layer.
 	endToEndTracingHeader = "x-goog-spanner-end-to-end-tracing"
 
+	// afeMetricHeader is the name of the metadata header if client
+	// has opted-in for the receiving Spanner API Frontend server timing metrics.
+	afeMetricHeader = "x-goog-spanner-enable-afe-server-timing"
+
 	// numChannels is the default value for NumChannels of client.
 	numChannels = 4
+
+	// Server timing header constants
+	serverTimingHeaderKey = "server-timing"
+	gfeTimingHeader       = "gfet4t7"
+	afeTimingHeader       = "afe"
+
+	// MinSessions for Experimental Host connection
+	experimentalHostMinSessions = 0
 )
 
 const (
@@ -84,7 +97,8 @@ const (
 )
 
 var (
-	validDBPattern = regexp.MustCompile("^projects/(?P<project>[^/]+)/instances/(?P<instance>[^/]+)/databases/(?P<database>[^/]+)$")
+	validDBPattern      = regexp.MustCompile("^projects/(?P<project>[^/]+)/instances/(?P<instance>[^/]+)/databases/(?P<database>[^/]+)$")
+	serverTimingPattern = regexp.MustCompile(`([a-zA-Z0-9_-]+);\s*dur=(\d*\.?\d+)`)
 )
 
 func validDatabaseName(db string) error {
@@ -355,9 +369,13 @@ type ClientConfig struct {
 	//
 	// Default: false
 	DisableNativeMetrics bool
+
+	// Default: false
+	IsExperimentalHost bool
 }
 
 type openTelemetryConfig struct {
+	enabled                        bool
 	meterProvider                  metric.MeterProvider
 	attributeMap                   []attribute.KeyValue
 	attributeMapWithMultiplexed    []attribute.KeyValue
@@ -407,6 +425,15 @@ func newClientWithConfig(ctx context.Context, database string, config ClientConf
 	ctx = trace.StartSpan(ctx, "cloud.google.com/go/spanner.NewClient")
 	defer func() { trace.EndSpan(ctx, err) }()
 
+	// Explicitly disable some gRPC experiments as they are not stable yet.
+	gRPCPickFirstEnvVarName := "GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST"
+	if os.Getenv(gRPCPickFirstEnvVarName) == "" {
+		err := os.Setenv(gRPCPickFirstEnvVarName, "false")
+		if err != nil {
+			logf(config.Logger, "Error overriding GRPC_EXPERIMENTAL_ENABLE_NEW_PICK_FIRST to false: %v. Ignoring.", err)
+		}
+	}
+
 	// Append emulator options if SPANNER_EMULATOR_HOST has been set.
 	if emulatorAddr := os.Getenv("SPANNER_EMULATOR_HOST"); emulatorAddr != "" {
 		schemeRemoved := regexp.MustCompile("^(http://|https://|passthrough:///)").ReplaceAllString(emulatorAddr, "")
@@ -425,6 +452,43 @@ func newClientWithConfig(ctx context.Context, database string, config ClientConf
 		config.NumChannels = numChannels
 	}
 
+	var metricsProvider metric.MeterProvider
+	if emulatorAddr := os.Getenv("SPANNER_EMULATOR_HOST"); emulatorAddr != "" {
+		// Do not emit native metrics when emulator is being used
+		metricsProvider = noop.NewMeterProvider()
+	}
+	// Check if native metrics are disabled via env.
+	if disableNativeMetrics, _ := strconv.ParseBool(os.Getenv("SPANNER_DISABLE_BUILTIN_METRICS")); disableNativeMetrics {
+		config.DisableNativeMetrics = true
+	}
+	if config.DisableNativeMetrics {
+		// Do not emit native metrics when DisableNativeMetrics is set
+		metricsProvider = noop.NewMeterProvider()
+	}
+	isAFEBuiltInMetricEnabled := strings.EqualFold("false", os.Getenv("SPANNER_DISABLE_AFE_SERVER_TIMING"))
+	isGRPCBuiltInMetricsEnabled := strings.EqualFold("false", os.Getenv("SPANNER_DISABLE_DIRECT_ACCESS_GRPC_BUILTIN_METRICS"))
+	// enable the AFE/GRPC built-in metrics if direct-path is enabled
+	isDirectPathEnabled, _ := strconv.ParseBool(os.Getenv("GOOGLE_SPANNER_ENABLE_DIRECT_ACCESS"))
+	if isDirectPathEnabled {
+		isAFEBuiltInMetricEnabled = true
+		isGRPCBuiltInMetricsEnabled = true
+	}
+	// disable the AFE/GRPC built-in metrics if the env var is explicitly set
+	if ok, _ := strconv.ParseBool(os.Getenv("SPANNER_DISABLE_AFE_SERVER_TIMING")); ok {
+		isAFEBuiltInMetricEnabled = false
+	}
+	if ok, _ := strconv.ParseBool(os.Getenv("SPANNER_DISABLE_DIRECT_ACCESS_GRPC_BUILTIN_METRICS")); ok {
+		isGRPCBuiltInMetricsEnabled = false
+	}
+
+	metricsTracerFactory, err := newBuiltinMetricsTracerFactory(ctx, database, config.Compression, isAFEBuiltInMetricEnabled, isGRPCBuiltInMetricsEnabled, metricsProvider, opts...)
+	if err != nil {
+		return nil, err
+	}
+	if len(metricsTracerFactory.clientOpts) > 0 {
+		opts = append(opts, metricsTracerFactory.clientOpts...)
+	}
+
 	var pool gtransport.ConnPool
 
 	if gme != nil {
@@ -433,6 +497,14 @@ func newClientWithConfig(ctx context.Context, database string, config ClientConf
 	} else {
 		// Create gtransport ConnPool as usual if MultiEndpoint is not used.
 		// gRPC options.
+
+		// Add a unaryClientInterceptor and streamClientInterceptor.
+		reqIDInjector := new(requestIDHeaderInjector)
+		opts = append(opts,
+			option.WithGRPCDialOption(grpc.WithChainStreamInterceptor(reqIDInjector.interceptStream)),
+			option.WithGRPCDialOption(grpc.WithChainUnaryInterceptor(reqIDInjector.interceptUnary)),
+		)
+
 		allOpts := allClientOpts(config.NumChannels, config.Compression, opts...)
 		pool, err = gtransport.DialPool(ctx, allOpts...)
 		if err != nil {
@@ -479,6 +551,38 @@ func newClientWithConfig(ctx context.Context, database string, config ClientConf
 		md.Append(endToEndTracingHeader, "true")
 	}
 
+	if isAFEBuiltInMetricEnabled {
+		md.Append(afeMetricHeader, "true")
+	}
+
+	if isMultiplexed := strings.ToLower(os.Getenv("GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS")); isMultiplexed != "" && !config.enableMultiplexSession {
+		config.enableMultiplexSession, err = strconv.ParseBool(isMultiplexed)
+		if err != nil {
+			return nil, spannerErrorf(codes.InvalidArgument, "GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS must be either true or false")
+		}
+	}
+	if isMultiplexForRW := os.Getenv("GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS_FOR_RW"); isMultiplexForRW != "" && !config.enableMultiplexedSessionForRW {
+		config.enableMultiplexedSessionForRW, err = strconv.ParseBool(isMultiplexForRW)
+		if err != nil {
+			return nil, spannerErrorf(codes.InvalidArgument, "GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS_FOR_RW must be either true or false")
+		}
+		config.enableMultiplexedSessionForRW = config.enableMultiplexedSessionForRW && config.SessionPoolConfig.enableMultiplexSession
+	}
+	if isMultiplexForPartitionOps := os.Getenv("GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS_PARTITIONED_OPS"); isMultiplexForPartitionOps != "" && !config.enableMultiplexedSessionForPartitionedOps {
+		config.enableMultiplexedSessionForPartitionedOps, err = strconv.ParseBool(isMultiplexForPartitionOps)
+		if err != nil {
+			return nil, spannerErrorf(codes.InvalidArgument, "GOOGLE_CLOUD_SPANNER_MULTIPLEXED_SESSIONS_PARTITIONED_OPS must be either true or false")
+		}
+		config.enableMultiplexedSessionForPartitionedOps = config.enableMultiplexedSessionForPartitionedOps && config.SessionPoolConfig.enableMultiplexSession
+	}
+
+	if config.IsExperimentalHost {
+		config.SessionPoolConfig.enableMultiplexSession = true
+		config.enableMultiplexedSessionForRW = true
+		config.enableMultiplexedSessionForPartitionedOps = true
+		config.SessionPoolConfig.MinOpened = experimentalHostMinSessions
+	}
+
 	// Create a session client.
 	sc := newSessionClient(pool, database, config.UserAgent, sessionLabels, config.DatabaseRole, config.DisableRouteToLeader, md, config.BatchTimeout, config.Logger, config.CallOptions)
 
@@ -491,27 +595,6 @@ func newClientWithConfig(ctx context.Context, database string, config ClientConf
 	// To prevent data race in unit tests (ex: TestClient_SessionNotFound)
 	sc.mu.Lock()
 	sc.otConfig = otConfig
-	sc.mu.Unlock()
-
-	var metricsProvider metric.MeterProvider
-	if emulatorAddr := os.Getenv("SPANNER_EMULATOR_HOST"); emulatorAddr != "" {
-		// Do not emit native metrics when emulator is being used
-		metricsProvider = noop.NewMeterProvider()
-	}
-	// Check if native metrics are disabled via env.
-	if disableNativeMetrics, _ := strconv.ParseBool(os.Getenv("SPANNER_DISABLE_BUILTIN_METRICS")); disableNativeMetrics {
-		config.DisableNativeMetrics = true
-	}
-	if config.DisableNativeMetrics {
-		// Do not emit native metrics when DisableNativeMetrics is set
-		metricsProvider = noop.NewMeterProvider()
-	}
-
-	metricsTracerFactory, err := newBuiltinMetricsTracerFactory(ctx, database, metricsProvider, config.Compression, opts...)
-	if err != nil {
-		return nil, err
-	}
-	sc.mu.Lock()
 	sc.metricsTracerFactory = metricsTracerFactory
 	sc.mu.Unlock()
 
@@ -597,6 +680,7 @@ func allClientOpts(numChannels int, compression string, userOpts ...option.Clien
 	if enableDirectPathXds, _ := strconv.ParseBool(os.Getenv("GOOGLE_SPANNER_ENABLE_DIRECT_ACCESS")); enableDirectPathXds {
 		clientDefaultOpts = append(clientDefaultOpts, internaloption.AllowNonDefaultServiceAccount(true))
 		clientDefaultOpts = append(clientDefaultOpts, internaloption.EnableDirectPath(true), internaloption.EnableDirectPathXds())
+		clientDefaultOpts = append(clientDefaultOpts, internaloption.AllowHardBoundTokens("ALTS"))
 	}
 	if compression == "gzip" {
 		userOpts = append(userOpts, option.WithGRPCDialOption(grpc.WithDefaultCallOptions(
@@ -630,8 +714,9 @@ func metricsInterceptor() grpc.UnaryClientInterceptor {
 			mt.currOp.setDirectPathEnabled(true)
 		}
 
+		var md metadata.MD
 		peerInfo := &peer.Peer{}
-		opts = append(opts, grpc.Peer(peerInfo))
+		opts = append(opts, grpc.Header(&md), grpc.Peer(peerInfo))
 		err := invoker(ctx, method, req, reply, cc, opts...)
 
 		statusCode, _ := status.FromError(err)
@@ -646,6 +731,8 @@ func metricsInterceptor() grpc.UnaryClientInterceptor {
 		}
 
 		mt.currOp.currAttempt.setDirectPathUsed(isDirectPathUsed)
+		metrics := parseServerTimingHeader(md)
+		mt.currOp.currAttempt.setServerTimingMetrics(metrics)
 		recordAttemptCompletion(mt)
 		return err
 	}
@@ -661,6 +748,9 @@ type wrappedStream struct {
 
 func (w *wrappedStream) RecvMsg(m any) error {
 	err := w.ClientStream.RecvMsg(m)
+	if errors.Is(err, io.EOF) {
+		return err
+	}
 	ctx := w.ClientStream.Context()
 	mt, ok := ctx.Value(metricsTracerKey).(*builtinMetricsTracer)
 	if !ok {
@@ -748,7 +838,7 @@ func getQueryOptions(opts QueryOptions) QueryOptions {
 // Close closes the client.
 func (c *Client) Close() {
 	if c.metricsTracerFactory != nil {
-		c.metricsTracerFactory.shutdown()
+		c.metricsTracerFactory.shutdown(context.Background())
 	}
 	if c.idleSessions != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -844,13 +934,20 @@ func (c *Client) BatchReadOnlyTransaction(ctx context.Context, tb TimestampBound
 		err error
 	)
 
-	// Create session.
-	s, err = c.sc.createSession(ctx)
-	if err != nil {
-		return nil, err
+	if c.idleSessions.isMultiplexedSessionForPartitionedOpsEnabled() {
+		sh, err = c.idleSessions.takeMultiplexed(ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Create session.
+		s, err = c.sc.createSession(ctx)
+		if err != nil {
+			return nil, err
+		}
+		sh = &sessionHandle{session: s}
+		sh.updateLastUseTime()
 	}
-	sh = &sessionHandle{session: s}
-	sh.updateLastUseTime()
 
 	// Begin transaction.
 	res, err := sh.getClient().BeginTransaction(contextWithOutgoingMetadata(ctx, sh.getMetadata(), true), &sppb.BeginTransactionRequest{
@@ -862,6 +959,9 @@ func (c *Client) BatchReadOnlyTransaction(ctx context.Context, tb TimestampBound
 		},
 	})
 	if err != nil {
+		if isUnimplementedErrorForMultiplexedPartitionedDML(err) && c.idleSessions.isMultiplexedSessionForPartitionedOpsEnabled() {
+			c.idleSessions.disableMultiplexedSessionForRW()
+		}
 		return nil, ToSpannerError(err)
 	}
 	tx = res.Id
@@ -1000,8 +1100,12 @@ func (c *Client) rwTransaction(ctx context.Context, f func(context.Context, *Rea
 			err error
 		)
 		if sh == nil || sh.getID() == "" || sh.getClient() == nil {
-			// Session handle hasn't been allocated or has been destroyed.
-			sh, err = c.idleSessions.take(ctx)
+			if c.idleSessions.isMultiplexedSessionForRWEnabled() {
+				sh, err = c.idleSessions.takeMultiplexed(ctx)
+			} else {
+				// Session handle hasn't been allocated or has been destroyed.
+				sh, err = c.idleSessions.take(ctx)
+			}
 			if err != nil {
 				// If session retrieval fails, just fail the transaction.
 				return err
@@ -1010,31 +1114,49 @@ func (c *Client) rwTransaction(ctx context.Context, f func(context.Context, *Rea
 			// Some operations (for ex BatchUpdate) can be long-running. For such operations set the isLongRunningTransaction flag to be true
 			t.setSessionEligibilityForLongRunning(sh)
 		}
-		if t.shouldExplicitBegin(attempt) {
+		initTx := func(t *ReadWriteTransaction) {
+			t.txReadOnly.sp = c.idleSessions
+			t.txReadOnly.txReadEnv = t
+			t.txReadOnly.qo = c.qo
+			t.txReadOnly.ro = c.ro
+			t.txReadOnly.disableRouteToLeader = c.disableRouteToLeader
+			t.wb = []*Mutation{}
+			t.txOpts = c.txo.merge(options)
+			t.ct = c.ct
+			t.otConfig = c.otConfig
+		}
+		if t.shouldExplicitBegin(attempt, options) {
+			if t == nil {
+				t = &ReadWriteTransaction{
+					txReadyOrClosed: make(chan struct{}),
+				}
+			}
+			initTx(t)
 			// Make sure we set the current session handle before calling BeginTransaction.
 			// Note that the t.begin(ctx) call could change the session that is being used by the transaction, as the
 			// BeginTransaction RPC invocation will be retried on a new session if it returns SessionNotFound.
 			t.txReadOnly.sh = sh
-			if err = t.begin(ctx); err != nil {
-				trace.TracePrintf(ctx, nil, "Error while BeginTransaction during retrying a ReadWrite transaction: %v", ToSpannerError(err))
+			if err = t.begin(ctx, nil); err != nil {
+				if attempt > 0 {
+					trace.TracePrintf(ctx, nil, "Error while BeginTransaction during retrying a ReadWrite transaction: %v", ToSpannerError(err))
+				} else {
+					trace.TracePrintf(ctx, nil, "Error during the initial BeginTransaction for a ReadWrite transaction: %v", ToSpannerError(err))
+				}
 				return ToSpannerError(err)
 			}
 		} else {
+			var previousTx transactionID
+			if t != nil {
+				previousTx = t.previousTx
+			}
 			t = &ReadWriteTransaction{
 				txReadyOrClosed: make(chan struct{}),
+				previousTx:      previousTx,
 			}
 			t.txReadOnly.sh = sh
+			initTx(t)
 		}
 		attempt++
-		t.txReadOnly.sp = c.idleSessions
-		t.txReadOnly.txReadEnv = t
-		t.txReadOnly.qo = c.qo
-		t.txReadOnly.ro = c.ro
-		t.txReadOnly.disableRouteToLeader = c.disableRouteToLeader
-		t.wb = []*Mutation{}
-		t.txOpts = c.txo.merge(options)
-		t.ct = c.ct
-		t.otConfig = c.otConfig
 
 		trace.TracePrintf(ctx, map[string]interface{}{"transactionSelector": t.getTransactionSelector().String()},
 			"Starting transaction attempt")
@@ -1042,6 +1164,9 @@ func (c *Client) rwTransaction(ctx context.Context, f func(context.Context, *Rea
 		resp, err = t.runInTransaction(ctx, f)
 		return err
 	})
+	if isUnimplementedErrorForMultiplexedRW(err) {
+		c.idleSessions.disableMultiplexedSessionForRW()
+	}
 	return resp, err
 }
 
@@ -1060,6 +1185,8 @@ type applyOption struct {
 	excludeTxnFromChangeStreams bool
 	// commitOptions is the commit options to use for the commit operation.
 	commitOptions CommitOptions
+	// It defines the isolationLevel for the RW transactions
+	isolationLevel sppb.TransactionOptions_IsolationLevel
 }
 
 // An ApplyOption is an optional argument to Apply.
@@ -1105,6 +1232,13 @@ func ExcludeTxnFromChangeStreams() ApplyOption {
 	}
 }
 
+// IsolationLevel returns an ApplyOptions that sets which isolationLevel for RW transaction
+func IsolationLevel(isolationLevel sppb.TransactionOptions_IsolationLevel) ApplyOption {
+	return func(ao *applyOption) {
+		ao.isolationLevel = isolationLevel
+	}
+}
+
 // ApplyCommitOptions returns an ApplyOption that sets the commit options to use for the commit operation.
 func ApplyCommitOptions(co CommitOptions) ApplyOption {
 	return func(ao *applyOption) {
@@ -1130,10 +1264,10 @@ func (c *Client) Apply(ctx context.Context, ms []*Mutation, opts ...ApplyOption)
 	if !ao.atLeastOnce {
 		resp, err := c.ReadWriteTransactionWithOptions(ctx, func(ctx context.Context, t *ReadWriteTransaction) error {
 			return t.BufferWrite(ms)
-		}, TransactionOptions{CommitPriority: ao.priority, TransactionTag: ao.transactionTag, ExcludeTxnFromChangeStreams: ao.excludeTxnFromChangeStreams, CommitOptions: ao.commitOptions})
+		}, TransactionOptions{CommitPriority: ao.priority, TransactionTag: ao.transactionTag, ExcludeTxnFromChangeStreams: ao.excludeTxnFromChangeStreams, CommitOptions: ao.commitOptions, IsolationLevel: ao.isolationLevel})
 		return resp.CommitTs, err
 	}
-	t := &writeOnlyTransaction{sp: c.idleSessions, commitPriority: ao.priority, transactionTag: ao.transactionTag, disableRouteToLeader: c.disableRouteToLeader, excludeTxnFromChangeStreams: ao.excludeTxnFromChangeStreams, commitOptions: ao.commitOptions}
+	t := &writeOnlyTransaction{sp: c.idleSessions, commitPriority: ao.priority, transactionTag: ao.transactionTag, disableRouteToLeader: c.disableRouteToLeader, excludeTxnFromChangeStreams: ao.excludeTxnFromChangeStreams, commitOptions: ao.commitOptions, isolationLevel: ao.isolationLevel}
 	return t.applyAtLeastOnce(ctx, ms...)
 }
 
@@ -1377,4 +1511,31 @@ func logf(logger *log.Logger, format string, v ...interface{}) {
 	} else {
 		logger.Printf(format, v...)
 	}
+}
+
+// parseServerTimingHeader extracts server timing metrics from gRPC metadata into a map
+func parseServerTimingHeader(md metadata.MD) map[string]time.Duration {
+	metrics := make(map[string]time.Duration)
+	if md == nil {
+		return metrics
+	}
+
+	serverTiming := md.Get(serverTimingHeaderKey)
+	if len(serverTiming) == 0 {
+		return metrics
+	}
+
+	for _, timing := range serverTiming {
+		matches := serverTimingPattern.FindAllStringSubmatch(timing, -1)
+		for _, match := range matches {
+			if len(match) == 3 { // full match + 2 capture groups
+				metricName := match[1]
+				duration, err := strconv.ParseFloat(match[2], 64)
+				if err == nil {
+					metrics[metricName] = time.Duration(duration*1000) * time.Microsecond
+				}
+			}
+		}
+	}
+	return metrics
 }
