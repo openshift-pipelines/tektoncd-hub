@@ -429,7 +429,7 @@ github.com/ikawaha/goahttpcheck
 # github.com/ikawaha/httpcheck v1.12.3
 ## explicit; go 1.19
 github.com/ikawaha/httpcheck
-# github.com/imdario/mergo v0.3.13
+# github.com/imdario/mergo v0.3.16
 ## explicit; go 1.13
 github.com/imdario/mergo
 # github.com/inconshreveable/mousetrap v1.1.0
