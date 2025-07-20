@@ -109,6 +109,9 @@ var (
 
 // New returns a new Gormigrate.
 func New(db *gorm.DB, options *Options, migrations []*Migration) *Gormigrate {
+	if options == nil {
+		options = DefaultOptions
+	}
 	if options.TableName == "" {
 		options.TableName = DefaultOptions.TableName
 	}
@@ -458,7 +461,8 @@ func (g *Gormigrate) unknownMigrationsHaveHappened() (bool, error) {
 }
 
 func (g *Gormigrate) insertMigration(id string) error {
-	record := map[string]interface{}{g.options.IDColumnName: id}
+	record := g.model()
+	reflect.ValueOf(record).Elem().FieldByName("ID").SetString(id)
 	return g.tx.Table(g.options.TableName).Create(record).Error
 }
 
