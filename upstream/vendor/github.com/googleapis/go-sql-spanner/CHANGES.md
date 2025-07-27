@@ -1,5 +1,212 @@
 # Changelog
 
+## [1.16.0](https://github.com/googleapis/go-sql-spanner/compare/v1.15.0...v1.16.0) (2025-07-03)
+
+
+### Features
+
+* Add BeginTransactionOption to configure how to begin a transaction ([21ed1e3](https://github.com/googleapis/go-sql-spanner/commit/21ed1e3a744d7052781e6f28aa7f25dc4ed891df))
+* Add RunDmlBatch function with typed return value ([#471](https://github.com/googleapis/go-sql-spanner/issues/471)) ([12ead7c](https://github.com/googleapis/go-sql-spanner/commit/12ead7c5df87813b167ab9dec025cf78fee520a2))
+* Return metadata and stats for client-side statements ([#470](https://github.com/googleapis/go-sql-spanner/issues/470)) ([19238ce](https://github.com/googleapis/go-sql-spanner/commit/19238cec2f77998c0e8052794be2c25167057b04))
+
+
+### Bug Fixes
+
+* Update all dependencies ([#464](https://github.com/googleapis/go-sql-spanner/issues/464)) ([574d6fe](https://github.com/googleapis/go-sql-spanner/commit/574d6fe6fa42a138b0123ac0bcf756413c87ea25))
+* Use client opts to auto configure emulator instead of environment variable ([#468](https://github.com/googleapis/go-sql-spanner/issues/468)) ([a518727](https://github.com/googleapis/go-sql-spanner/commit/a5187277ae02be0e3935d746751aadd76beb0c8e))
+
+
+### Performance Improvements
+
+* Inline BeginTransaction with first statement ([21ed1e3](https://github.com/googleapis/go-sql-spanner/commit/21ed1e3a744d7052781e6f28aa7f25dc4ed891df))
+
+## [1.15.0](https://github.com/googleapis/go-sql-spanner/compare/v1.14.0...v1.15.0) (2025-06-27)
+
+
+### Features
+
+* Add DirectExecuteQuery option ([#455](https://github.com/googleapis/go-sql-spanner/issues/455)) ([e2620e6](https://github.com/googleapis/go-sql-spanner/commit/e2620e6cdc537991f3301d0b8f71af9e69e2b479))
+* Add ExecuteBatchDml func with batch result ([#454](https://github.com/googleapis/go-sql-spanner/issues/454)) ([73c3fb0](https://github.com/googleapis/go-sql-spanner/commit/73c3fb05208463822834a7b671ded42645955b6e)), refs [#377](https://github.com/googleapis/go-sql-spanner/issues/377)
+* Add option to return metadata and stats ([#456](https://github.com/googleapis/go-sql-spanner/issues/456)) ([e001cd1](https://github.com/googleapis/go-sql-spanner/commit/e001cd1db3345ed9b0cf663893cff0f186f9da98))
+
+
+### Bug Fixes
+
+* Include mutations from original attempt in retry ([#463](https://github.com/googleapis/go-sql-spanner/issues/463)) ([e285310](https://github.com/googleapis/go-sql-spanner/commit/e285310e72db13edea9ba13dbd78d10231eda54b))
+* Update all dependencies ([#446](https://github.com/googleapis/go-sql-spanner/issues/446)) ([3083c93](https://github.com/googleapis/go-sql-spanner/commit/3083c9372caf668e38a0a8a141c761710cbdad2c))
+* Update all dependencies ([#457](https://github.com/googleapis/go-sql-spanner/issues/457)) ([62ca7b4](https://github.com/googleapis/go-sql-spanner/commit/62ca7b43012aa670c46dca01d4ba8e4fe8f0188e))
+* Update module github.com/hashicorp/golang-lru to v2 ([#447](https://github.com/googleapis/go-sql-spanner/issues/447)) ([d30d6d1](https://github.com/googleapis/go-sql-spanner/commit/d30d6d1f622b172a6c58580325f663da92df2f6d))
+* Update module github.com/hashicorp/golang-lru to v2 ([#452](https://github.com/googleapis/go-sql-spanner/issues/452)) ([546cdaa](https://github.com/googleapis/go-sql-spanner/commit/546cdaa6f93e35941d88d9bba024a313197d52af))
+* Update module github.com/hashicorp/golang-lru to v2 ([#458](https://github.com/googleapis/go-sql-spanner/issues/458)) ([1b192c8](https://github.com/googleapis/go-sql-spanner/commit/1b192c83051620fa0fb41c9876eb1414dfd1e194))
+* Wrap AlreadyExists error for instance creation when autoConfigEmulator=true ([#450](https://github.com/googleapis/go-sql-spanner/issues/450)) ([3aa5ca2](https://github.com/googleapis/go-sql-spanner/commit/3aa5ca2cada7267f0f81fc27d3ec161ee6baf664))
+
+
+### Performance Improvements
+
+* Avoid to string conversion in statement parser ([#453](https://github.com/googleapis/go-sql-spanner/issues/453)) ([e6f889a](https://github.com/googleapis/go-sql-spanner/commit/e6f889a6bd9cf3cb8d150fa529f97ac1560fa1d2))
+
+## [1.14.0](https://github.com/googleapis/go-sql-spanner/compare/v1.13.2...v1.14.0) (2025-06-05)
+
+
+### Features
+
+* Support PostgreSQL-dialect databases ([#443](https://github.com/googleapis/go-sql-spanner/issues/443)) ([30df107](https://github.com/googleapis/go-sql-spanner/commit/30df1074644ef881d1c7993376167eb7162e53da))
+* Support UUID data type ([#440](https://github.com/googleapis/go-sql-spanner/issues/440)) ([c68065d](https://github.com/googleapis/go-sql-spanner/commit/c68065d5eb44e80ef93d02bddad759e0cc1993ac))
+
+
+### Bug Fixes
+
+* Return explicit error message when using DDL statements with QueryContext ([#438](https://github.com/googleapis/go-sql-spanner/issues/438)) ([a214d86](https://github.com/googleapis/go-sql-spanner/commit/a214d86e1096eaac828434d02c1de1f93d8095c8))
+* Update all dependencies ([#419](https://github.com/googleapis/go-sql-spanner/issues/419)) ([70fcee5](https://github.com/googleapis/go-sql-spanner/commit/70fcee5a50361760aa9634f4ac77499f1bf5036f))
+* Update all dependencies ([#430](https://github.com/googleapis/go-sql-spanner/issues/430)) ([420902e](https://github.com/googleapis/go-sql-spanner/commit/420902e9136dbad3bbc7ac7b860e785f40944d28))
+* Update module cloud.google.com/go/spanner to v1.82.0 ([#423](https://github.com/googleapis/go-sql-spanner/issues/423)) ([57881f7](https://github.com/googleapis/go-sql-spanner/commit/57881f779d6f88f8c549ac3f17cdd4af9edf1a7b))
+* Update module github.com/hashicorp/golang-lru to v2 ([#444](https://github.com/googleapis/go-sql-spanner/issues/444)) ([98e3097](https://github.com/googleapis/go-sql-spanner/commit/98e30977f2287b80ba4d3cb35e13089f738e7e57))
+
+
+### Performance Improvements
+
+* Use statement cache to avoid repeated SQL string parsing ([#445](https://github.com/googleapis/go-sql-spanner/issues/445)) ([f2fbcab](https://github.com/googleapis/go-sql-spanner/commit/f2fbcabff7b94eea7e56ebf401cebe1907de0f48))
+
+## [1.13.2](https://github.com/googleapis/go-sql-spanner/compare/v1.13.1...v1.13.2) (2025-05-14)
+
+
+### Bug Fixes
+
+* Update all dependencies ([#417](https://github.com/googleapis/go-sql-spanner/issues/417)) ([7a408a2](https://github.com/googleapis/go-sql-spanner/commit/7a408a29106102e281342acd66c25c2d74f89aec))
+
+## [1.13.1](https://github.com/googleapis/go-sql-spanner/compare/v1.13.0...v1.13.1) (2025-04-28)
+
+
+### Bug Fixes
+
+* Skip Configurator func when marshalling to json ([#411](https://github.com/googleapis/go-sql-spanner/issues/411)) ([d30ab5e](https://github.com/googleapis/go-sql-spanner/commit/d30ab5ec44c231194fffc49c7b490e1962e588dc))
+
+## [1.13.0](https://github.com/googleapis/go-sql-spanner/compare/v1.12.0...v1.13.0) (2025-03-28)
+
+
+### Features
+
+* Support default isolation level for connection ([#404](https://github.com/googleapis/go-sql-spanner/issues/404)) ([219fe6e](https://github.com/googleapis/go-sql-spanner/commit/219fe6e272455db1c2e9b479acaf1bf51fb9d917))
+* Support isolation level REPEATABLE READ ([#403](https://github.com/googleapis/go-sql-spanner/issues/403)) ([95ef5f3](https://github.com/googleapis/go-sql-spanner/commit/95ef5f34db8abf2c77c30e1991b7b6929950c5dc))
+
+## [1.12.0](https://github.com/googleapis/go-sql-spanner/compare/v1.11.2...v1.12.0) (2025-03-18)
+
+
+### Features
+
+* Add AutoConfigEmulator option ([#395](https://github.com/googleapis/go-sql-spanner/issues/395)) ([4193437](https://github.com/googleapis/go-sql-spanner/commit/4193437f27b419aecc7e2669543f3c931953fcc3)), refs [#384](https://github.com/googleapis/go-sql-spanner/issues/384)
+* Partitioned DML as ExecOption ([#393](https://github.com/googleapis/go-sql-spanner/issues/393)) ([ac2f7f2](https://github.com/googleapis/go-sql-spanner/commit/ac2f7f29979d026619cfded186b67714d540011c)), refs [#378](https://github.com/googleapis/go-sql-spanner/issues/378)
+* Use retry delay for aborted read/write transactions ([#398](https://github.com/googleapis/go-sql-spanner/issues/398)) ([b357353](https://github.com/googleapis/go-sql-spanner/commit/b357353b089c757c5f33d693bb18505902f5b307))
+
+
+### Bug Fixes
+
+* Protect transaction runner from panic in tx func ([#394](https://github.com/googleapis/go-sql-spanner/issues/394)) ([0dc0845](https://github.com/googleapis/go-sql-spanner/commit/0dc0845e56ca8a97fd76b6513c00fde87e67b939)), refs [#386](https://github.com/googleapis/go-sql-spanner/issues/386)
+
+## [1.11.2](https://github.com/googleapis/go-sql-spanner/compare/v1.11.1...v1.11.2) (2025-03-06)
+
+
+### Performance Improvements
+
+* Use last_statement optimization for auto-commit ([#387](https://github.com/googleapis/go-sql-spanner/issues/387)) ([21f4923](https://github.com/googleapis/go-sql-spanner/commit/21f4923ce1536f2b6e99973d6d804a277f5af863))
+
+## [1.11.1](https://github.com/googleapis/go-sql-spanner/compare/v1.11.0...v1.11.1) (2025-02-14)
+
+
+### Bug Fixes
+
+* Session leak when tx was aborted during commit ([#382](https://github.com/googleapis/go-sql-spanner/issues/382)) ([1bccea5](https://github.com/googleapis/go-sql-spanner/commit/1bccea5dfec553af94a78d22420d71c7b2bda84b)), refs [#380](https://github.com/googleapis/go-sql-spanner/issues/380)
+
+
+### Documentation
+
+* Add samples for getting started guide ([#361](https://github.com/googleapis/go-sql-spanner/issues/361)) ([da4e3c8](https://github.com/googleapis/go-sql-spanner/commit/da4e3c8c1f3adcf2567d45fc89311cb3865bb846))
+
+## [1.11.0](https://github.com/googleapis/go-sql-spanner/compare/v1.10.1...v1.11.0) (2025-02-10)
+
+
+### Features
+
+* DML auto-batching ([#366](https://github.com/googleapis/go-sql-spanner/issues/366)) ([73db4a3](https://github.com/googleapis/go-sql-spanner/commit/73db4a356f44855c301098cdaf689a8e4ac122db))
+* Option for decode to native array ([#369](https://github.com/googleapis/go-sql-spanner/issues/369)) ([05952e0](https://github.com/googleapis/go-sql-spanner/commit/05952e0cc56e7cc6c47b006c4d2cac5a730c9193))
+* Partitioned queries ([#351](https://github.com/googleapis/go-sql-spanner/issues/351)) ([86d1922](https://github.com/googleapis/go-sql-spanner/commit/86d19228548a378be3b79f37ff8413a587cfec0b))
+* Support LastInsertId in transactions ([#372](https://github.com/googleapis/go-sql-spanner/issues/372)) ([eb9a4ef](https://github.com/googleapis/go-sql-spanner/commit/eb9a4efcc4d33b984dfd83389c5e04eee79121bc)), refs [#346](https://github.com/googleapis/go-sql-spanner/issues/346)
+* Support LastInsertId outside explicit transactions ([#362](https://github.com/googleapis/go-sql-spanner/issues/362)) ([8d38601](https://github.com/googleapis/go-sql-spanner/commit/8d386016ac62b2315003e3668c1e37776c7b6335)), refs [#346](https://github.com/googleapis/go-sql-spanner/issues/346)
+
+## [1.10.1](https://github.com/googleapis/go-sql-spanner/compare/v1.10.0...v1.10.1) (2025-01-30)
+
+
+### Bug Fixes
+
+* Prepared statements should also support valuer/scanner ([#365](https://github.com/googleapis/go-sql-spanner/issues/365)) ([4d13c65](https://github.com/googleapis/go-sql-spanner/commit/4d13c6596919b6b12d5a3a07695dbfd2a83f5a04))
+
+## [1.10.0](https://github.com/googleapis/go-sql-spanner/compare/v1.9.0...v1.10.0) (2025-01-27)
+
+
+### Features
+
+* Add CreateConnector with support for custom config ([#336](https://github.com/googleapis/go-sql-spanner/issues/336)) ([dc5df2f](https://github.com/googleapis/go-sql-spanner/commit/dc5df2f32a666b4cfb5f47945853ba6f0efe2711))
+* Add DecodeOption for returning protobuf values ([#341](https://github.com/googleapis/go-sql-spanner/issues/341)) ([1b71476](https://github.com/googleapis/go-sql-spanner/commit/1b71476350dd06147c09316c0b48690e6fb837a3)), refs [#284](https://github.com/googleapis/go-sql-spanner/issues/284)
+* Add structured logger ([#345](https://github.com/googleapis/go-sql-spanner/issues/345)) ([5f7b8db](https://github.com/googleapis/go-sql-spanner/commit/5f7b8db3f4acc0de55b74bbdf0d0008b0b8dd3bc))
+* Begin read/write transaction with options ([#355](https://github.com/googleapis/go-sql-spanner/issues/355)) ([66495ab](https://github.com/googleapis/go-sql-spanner/commit/66495ab5a66201a807fd4e633284c22b856d3484))
+* Read-only transaction with options ([#352](https://github.com/googleapis/go-sql-spanner/issues/352)) ([9dea151](https://github.com/googleapis/go-sql-spanner/commit/9dea151dacf8c07d2d21faa0e5ca1dc0ba57a95d))
+* Return PROTO columns as bytes and integers ([#342](https://github.com/googleapis/go-sql-spanner/issues/342)) ([bdd56df](https://github.com/googleapis/go-sql-spanner/commit/bdd56df8ccb7ecb6dc1ba24cd540ac33b0f66fcc)), refs [#333](https://github.com/googleapis/go-sql-spanner/issues/333)
+* Support GRAPH and pipe syntax ([#334](https://github.com/googleapis/go-sql-spanner/issues/334)) ([738daa8](https://github.com/googleapis/go-sql-spanner/commit/738daa8e2e3cfe3fa2feb7e782b43e6340befa4a))
+* Support max_commit_delay ([#347](https://github.com/googleapis/go-sql-spanner/issues/347)) ([a040588](https://github.com/googleapis/go-sql-spanner/commit/a0405885e89da3301ae77e56257bbe7d74e9d1dd))
+* Support transaction and statement tags ([#338](https://github.com/googleapis/go-sql-spanner/issues/338)) ([6fc41dd](https://github.com/googleapis/go-sql-spanner/commit/6fc41dd2d966a10d34529ed52b8371df540eca5c))
+
+
+### Bug Fixes
+
+* DML with THEN RETURN used read-only transaction ([#339](https://github.com/googleapis/go-sql-spanner/issues/339)) ([ae36d4c](https://github.com/googleapis/go-sql-spanner/commit/ae36d4ceee8b1a62ea6b18d43bfbacbb0b84f0f3)), refs [#235](https://github.com/googleapis/go-sql-spanner/issues/235)
+
+
+### Documentation
+
+* Add connect sample ([#360](https://github.com/googleapis/go-sql-spanner/issues/360)) ([89931c2](https://github.com/googleapis/go-sql-spanner/commit/89931c2dc9fb8cdf7c44e2f3e16670c87b6391af))
+* Add DirectedRead sample ([#349](https://github.com/googleapis/go-sql-spanner/issues/349)) ([0f62ec5](https://github.com/googleapis/go-sql-spanner/commit/0f62ec5b4031acbde5c4afeb99ce9855eb52a5cc))
+* Add sample for query parameters ([#359](https://github.com/googleapis/go-sql-spanner/issues/359)) ([f534d01](https://github.com/googleapis/go-sql-spanner/commit/f534d013f24efe16c16994fccbec83605f91626a))
+
+## [1.9.0](https://github.com/googleapis/go-sql-spanner/compare/v1.8.0...v1.9.0) (2024-11-22)
+
+
+### Features
+
+* **.github:** Add staticcheck ([#326](https://github.com/googleapis/go-sql-spanner/issues/326)) ([9d4f987](https://github.com/googleapis/go-sql-spanner/commit/9d4f98704e44554cf3d155b87a44051844dea578))
+* Add isolation level option for disabling internal retries ([#327](https://github.com/googleapis/go-sql-spanner/issues/327)) ([118a177](https://github.com/googleapis/go-sql-spanner/commit/118a177855fcc7a14a95e357e1e92c8279c0d0a7))
+* Add option for disabling native metrics ([#323](https://github.com/googleapis/go-sql-spanner/issues/323)) ([3c45d27](https://github.com/googleapis/go-sql-spanner/commit/3c45d2748213d9a571952f847b45b2843f1b5a29)), refs [#310](https://github.com/googleapis/go-sql-spanner/issues/310)
+
+
+### Bug Fixes
+
+* **benchmarks:** Staticcheck errors ([#325](https://github.com/googleapis/go-sql-spanner/issues/325)) ([0ed841e](https://github.com/googleapis/go-sql-spanner/commit/0ed841e037dce1c160e2e8058647f0d615a911d3))
+
+
+### Performance Improvements
+
+* Use resetForRetry for retrying aborted transactions ([#319](https://github.com/googleapis/go-sql-spanner/issues/319)) ([1ceb9ee](https://github.com/googleapis/go-sql-spanner/commit/1ceb9ee4a780b51e0fa9889719d4e67245ccb825))
+
+
+### Documentation
+
+* Add missing conn.Close() calls ([#324](https://github.com/googleapis/go-sql-spanner/issues/324)) ([b4803a6](https://github.com/googleapis/go-sql-spanner/commit/b4803a6488b11b7216e2f4c541eadbd99e53cce2))
+
+## [1.8.0](https://github.com/googleapis/go-sql-spanner/compare/v1.7.4...v1.8.0) (2024-11-14)
+
+
+### Features
+
+* Add connection property for enableEndToEndTracing ([#307](https://github.com/googleapis/go-sql-spanner/issues/307)) ([c39f57f](https://github.com/googleapis/go-sql-spanner/commit/c39f57f06cbccd7cdde1091c844a916fddc3d67b))
+* Add method for getting batched statements ([#318](https://github.com/googleapis/go-sql-spanner/issues/318)) ([03d4818](https://github.com/googleapis/go-sql-spanner/commit/03d4818582030e24fb48b96a911ef313c33d701b))
+* Add transaction runner for better transaction retries ([#315](https://github.com/googleapis/go-sql-spanner/issues/315)) ([3731176](https://github.com/googleapis/go-sql-spanner/commit/3731176c8f2aed8101a6e726c9c8a66b13525d02))
+* Expose underlying *spanner.Client ([#313](https://github.com/googleapis/go-sql-spanner/issues/313)) ([29e69c7](https://github.com/googleapis/go-sql-spanner/commit/29e69c7c4d98782c6bec45934911efdd84371f74))
+
+
+### Bug Fixes
+
+* Autoremove container in examples ([#314](https://github.com/googleapis/go-sql-spanner/issues/314)) ([51a9a54](https://github.com/googleapis/go-sql-spanner/commit/51a9a5451688f6beac876fbb73998268b8f24b56))
+* Return error when value conversion is missing ([#311](https://github.com/googleapis/go-sql-spanner/issues/311)) ([a0bc939](https://github.com/googleapis/go-sql-spanner/commit/a0bc93948f4f43b2b550cba8cf40a24043933528)), refs [#309](https://github.com/googleapis/go-sql-spanner/issues/309)
+
 ## [1.7.4](https://github.com/googleapis/go-sql-spanner/compare/v1.7.3...v1.7.4) (2024-10-16)
 
 
