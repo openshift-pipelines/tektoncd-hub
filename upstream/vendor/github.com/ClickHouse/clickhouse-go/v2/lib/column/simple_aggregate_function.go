@@ -21,7 +21,6 @@ import (
 	"github.com/ClickHouse/ch-go/proto"
 	"reflect"
 	"strings"
-	"time"
 )
 
 type SimpleAggregateFunction struct {
@@ -38,10 +37,10 @@ func (col *SimpleAggregateFunction) Name() string {
 	return col.name
 }
 
-func (col *SimpleAggregateFunction) parse(t Type, tz *time.Location) (_ Interface, err error) {
+func (col *SimpleAggregateFunction) parse(t Type, sc *ServerContext) (_ Interface, err error) {
 	col.chType = t
 	base := strings.TrimSpace(strings.SplitN(t.params(), ",", 2)[1])
-	if col.base, err = Type(base).Column(col.name, tz); err == nil {
+	if col.base, err = Type(base).Column(col.name, sc); err == nil {
 		return col, nil
 	}
 	return nil, &UnsupportedColumnTypeError{
@@ -58,16 +57,16 @@ func (col *SimpleAggregateFunction) ScanType() reflect.Type {
 func (col *SimpleAggregateFunction) Rows() int {
 	return col.base.Rows()
 }
-func (col *SimpleAggregateFunction) Row(i int, ptr bool) interface{} {
+func (col *SimpleAggregateFunction) Row(i int, ptr bool) any {
 	return col.base.Row(i, ptr)
 }
-func (col *SimpleAggregateFunction) ScanRow(dest interface{}, rows int) error {
+func (col *SimpleAggregateFunction) ScanRow(dest any, rows int) error {
 	return col.base.ScanRow(dest, rows)
 }
-func (col *SimpleAggregateFunction) Append(v interface{}) ([]uint8, error) {
+func (col *SimpleAggregateFunction) Append(v any) ([]uint8, error) {
 	return col.base.Append(v)
 }
-func (col *SimpleAggregateFunction) AppendRow(v interface{}) error {
+func (col *SimpleAggregateFunction) AppendRow(v any) error {
 	return col.base.AppendRow(v)
 }
 func (col *SimpleAggregateFunction) Decode(reader *proto.Reader, rows int) error {

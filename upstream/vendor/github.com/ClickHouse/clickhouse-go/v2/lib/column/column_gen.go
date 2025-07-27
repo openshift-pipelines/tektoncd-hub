@@ -22,8 +22,10 @@ package column
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"github.com/ClickHouse/ch-go/proto"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/chcol"
 	"github.com/google/uuid"
 	"github.com/paulmach/orb"
 	"github.com/shopspring/decimal"
@@ -34,7 +36,7 @@ import (
 	"time"
 )
 
-func (t Type) Column(name string, tz *time.Location) (Interface, error) {
+func (t Type) Column(name string, sc *ServerContext) (Interface, error) {
 	switch t {
 	case "Float32":
 		return &Float32{name: name}, nil
@@ -95,15 +97,15 @@ func (t Type) Column(name string, tz *time.Location) (Interface, error) {
 	case "Bool", "Boolean":
 		return &Bool{name: name}, nil
 	case "Date":
-		return &Date{name: name, location: tz}, nil
+		return &Date{name: name, location: sc.Timezone}, nil
 	case "Date32":
-		return &Date32{name: name, location: tz}, nil
+		return &Date32{name: name, location: sc.Timezone}, nil
 	case "UUID":
 		return &UUID{name: name}, nil
 	case "Nothing":
 		return &Nothing{name: name}, nil
 	case "Ring":
-		set, err := (&Array{name: name}).parse("Array(Point)", tz)
+		set, err := (&Array{name: name}).parse("Array(Point)", sc)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +115,7 @@ func (t Type) Column(name string, tz *time.Location) (Interface, error) {
 			name: name,
 		}, nil
 	case "Polygon":
-		set, err := (&Array{name: name}).parse("Array(Ring)", tz)
+		set, err := (&Array{name: name}).parse("Array(Ring)", sc)
 		if err != nil {
 			return nil, err
 		}
@@ -123,7 +125,7 @@ func (t Type) Column(name string, tz *time.Location) (Interface, error) {
 			name: name,
 		}, nil
 	case "MultiPolygon":
-		set, err := (&Array{name: name}).parse("Array(Polygon)", tz)
+		set, err := (&Array{name: name}).parse("Array(Polygon)", sc)
 		if err != nil {
 			return nil, err
 		}
@@ -135,38 +137,46 @@ func (t Type) Column(name string, tz *time.Location) (Interface, error) {
 	case "Point":
 		return &Point{name: name}, nil
 	case "String":
-		return &String{name: name}, nil
+		return &String{name: name, col: colStrProvider(name)}, nil
+	case "SharedVariant":
+		return &SharedVariant{name: name}, nil
 	case "Object('json')":
-		return &JSONObject{name: name, root: true, tz: tz}, nil
+		return &JSONObject{name: name, root: true, sc: sc}, nil
 	}
 
 	switch strType := string(t); {
 	case strings.HasPrefix(string(t), "Map("):
-		return (&Map{name: name}).parse(t, tz)
+		return (&Map{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Tuple("):
-		return (&Tuple{name: name}).parse(t, tz)
+		return (&Tuple{name: name}).parse(t, sc)
+	case strings.HasPrefix(string(t), "Variant("):
+		return (&Variant{name: name}).parse(t, sc)
+	case strings.HasPrefix(string(t), "Dynamic"):
+		return (&Dynamic{name: name}).parse(t, sc)
+	case strings.HasPrefix(string(t), "JSON"):
+		return (&JSON{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Decimal("):
 		return (&Decimal{name: name}).parse(t)
 	case strings.HasPrefix(strType, "Nested("):
-		return (&Nested{name: name}).parse(t, tz)
+		return (&Nested{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Array("):
-		return (&Array{name: name}).parse(t, tz)
+		return (&Array{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Interval"):
 		return (&Interval{name: name}).parse(t)
 	case strings.HasPrefix(string(t), "Nullable"):
-		return (&Nullable{name: name}).parse(t, tz)
+		return (&Nullable{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "FixedString"):
 		return (&FixedString{name: name}).parse(t)
 	case strings.HasPrefix(string(t), "LowCardinality"):
-		return (&LowCardinality{name: name}).parse(t, tz)
+		return (&LowCardinality{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "SimpleAggregateFunction"):
-		return (&SimpleAggregateFunction{name: name}).parse(t, tz)
+		return (&SimpleAggregateFunction{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Enum8") || strings.HasPrefix(string(t), "Enum16"):
 		return Enum(t, name)
 	case strings.HasPrefix(string(t), "DateTime64"):
-		return (&DateTime64{name: name}).parse(t, tz)
+		return (&DateTime64{name: name}).parse(t, sc.Timezone)
 	case strings.HasPrefix(strType, "DateTime") && !strings.HasPrefix(strType, "DateTime64"):
-		return (&DateTime{name: name}).parse(t, tz)
+		return (&DateTime{name: name}).parse(t, sc.Timezone)
 	}
 	return nil, &UnsupportedColumnTypeError{
 		t: t,
@@ -247,13 +257,16 @@ var (
 	scanTypeTime         = reflect.TypeOf(time.Time{})
 	scanTypeRing         = reflect.TypeOf(orb.Ring{})
 	scanTypePoint        = reflect.TypeOf(orb.Point{})
-	scanTypeSlice        = reflect.TypeOf([]interface{}{})
-	scanTypeMap          = reflect.TypeOf(map[string]interface{}{})
+	scanTypeSlice        = reflect.TypeOf([]any{})
+	scanTypeMap          = reflect.TypeOf(map[string]any{})
 	scanTypeBigInt       = reflect.TypeOf(&big.Int{})
 	scanTypeString       = reflect.TypeOf("")
 	scanTypePolygon      = reflect.TypeOf(orb.Polygon{})
 	scanTypeDecimal      = reflect.TypeOf(decimal.Decimal{})
 	scanTypeMultiPolygon = reflect.TypeOf(orb.MultiPolygon{})
+	scanTypeVariant      = reflect.TypeOf(chcol.Variant{})
+	scanTypeDynamic      = reflect.TypeOf(chcol.Dynamic{})
+	scanTypeJSON         = reflect.TypeOf(chcol.JSON{})
 )
 
 func (col *Float32) Name() string {
@@ -276,7 +289,7 @@ func (col *Float32) Reset() {
 	col.col.Reset()
 }
 
-func (col *Float32) ScanRow(dest interface{}, row int) error {
+func (col *Float32) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *float32:
@@ -298,7 +311,7 @@ func (col *Float32) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *Float32) Row(i int, ptr bool) interface{} {
+func (col *Float32) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -306,7 +319,7 @@ func (col *Float32) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *Float32) Append(v interface{}) (nulls []uint8, err error) {
+func (col *Float32) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []float32:
 		nulls = make([]uint8, len(v))
@@ -325,6 +338,20 @@ func (col *Float32) Append(v interface{}) (nulls []uint8, err error) {
 			}
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "Float32",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "Float32",
@@ -334,7 +361,7 @@ func (col *Float32) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *Float32) AppendRow(v interface{}) error {
+func (col *Float32) AppendRow(v any) error {
 	switch v := v.(type) {
 	case float32:
 		col.col.Append(v)
@@ -348,7 +375,21 @@ func (col *Float32) AppendRow(v interface{}) error {
 	case nil:
 		col.col.Append(0)
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "Float32",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(float32))
 		} else {
 			return &ColumnConverterError{
@@ -389,7 +430,7 @@ func (col *Float64) Reset() {
 	col.col.Reset()
 }
 
-func (col *Float64) ScanRow(dest interface{}, row int) error {
+func (col *Float64) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *float64:
@@ -413,7 +454,7 @@ func (col *Float64) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *Float64) Row(i int, ptr bool) interface{} {
+func (col *Float64) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -421,7 +462,7 @@ func (col *Float64) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *Float64) Append(v interface{}) (nulls []uint8, err error) {
+func (col *Float64) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []float64:
 		nulls = make([]uint8, len(v))
@@ -453,6 +494,20 @@ func (col *Float64) Append(v interface{}) (nulls []uint8, err error) {
 			col.AppendRow(v[i])
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "Float64",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "Float64",
@@ -462,7 +517,7 @@ func (col *Float64) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *Float64) AppendRow(v interface{}) error {
+func (col *Float64) AppendRow(v any) error {
 	switch v := v.(type) {
 	case float64:
 		col.col.Append(v)
@@ -490,7 +545,21 @@ func (col *Float64) AppendRow(v interface{}) error {
 			col.col.Append(0)
 		}
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "Float64",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(float64))
 		} else {
 			return &ColumnConverterError{
@@ -531,7 +600,7 @@ func (col *Int8) Reset() {
 	col.col.Reset()
 }
 
-func (col *Int8) ScanRow(dest interface{}, row int) error {
+func (col *Int8) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *int8:
@@ -560,7 +629,7 @@ func (col *Int8) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *Int8) Row(i int, ptr bool) interface{} {
+func (col *Int8) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -568,7 +637,7 @@ func (col *Int8) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *Int8) Append(v interface{}) (nulls []uint8, err error) {
+func (col *Int8) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []int8:
 		nulls = make([]uint8, len(v))
@@ -599,12 +668,28 @@ func (col *Int8) Append(v interface{}) (nulls []uint8, err error) {
 		nulls = make([]uint8, len(v))
 		for i := range v {
 			val := int8(0)
-			if *v[i] {
+			if v[i] == nil {
+				nulls[i] = 1
+			} else if *v[i] {
 				val = 1
 			}
 			col.col.Append(val)
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "Int8",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "Int8",
@@ -614,7 +699,7 @@ func (col *Int8) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *Int8) AppendRow(v interface{}) error {
+func (col *Int8) AppendRow(v any) error {
 	switch v := v.(type) {
 	case int8:
 		col.col.Append(v)
@@ -640,7 +725,21 @@ func (col *Int8) AppendRow(v interface{}) error {
 		}
 		col.col.Append(val)
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "Int8",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(int8))
 		} else {
 			return &ColumnConverterError{
@@ -681,7 +780,7 @@ func (col *Int16) Reset() {
 	col.col.Reset()
 }
 
-func (col *Int16) ScanRow(dest interface{}, row int) error {
+func (col *Int16) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *int16:
@@ -705,7 +804,7 @@ func (col *Int16) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *Int16) Row(i int, ptr bool) interface{} {
+func (col *Int16) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -713,7 +812,7 @@ func (col *Int16) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *Int16) Append(v interface{}) (nulls []uint8, err error) {
+func (col *Int16) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []int16:
 		nulls = make([]uint8, len(v))
@@ -745,6 +844,20 @@ func (col *Int16) Append(v interface{}) (nulls []uint8, err error) {
 			col.AppendRow(v[i])
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "Int16",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "Int16",
@@ -754,7 +867,7 @@ func (col *Int16) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *Int16) AppendRow(v interface{}) error {
+func (col *Int16) AppendRow(v any) error {
 	switch v := v.(type) {
 	case int16:
 		col.col.Append(v)
@@ -782,7 +895,21 @@ func (col *Int16) AppendRow(v interface{}) error {
 			col.col.Append(0)
 		}
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "Int16",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(int16))
 		} else {
 			return &ColumnConverterError{
@@ -823,7 +950,7 @@ func (col *Int32) Reset() {
 	col.col.Reset()
 }
 
-func (col *Int32) ScanRow(dest interface{}, row int) error {
+func (col *Int32) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *int32:
@@ -847,7 +974,7 @@ func (col *Int32) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *Int32) Row(i int, ptr bool) interface{} {
+func (col *Int32) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -855,7 +982,7 @@ func (col *Int32) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *Int32) Append(v interface{}) (nulls []uint8, err error) {
+func (col *Int32) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []int32:
 		nulls = make([]uint8, len(v))
@@ -887,6 +1014,20 @@ func (col *Int32) Append(v interface{}) (nulls []uint8, err error) {
 			col.AppendRow(v[i])
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "Int32",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "Int32",
@@ -896,7 +1037,7 @@ func (col *Int32) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *Int32) AppendRow(v interface{}) error {
+func (col *Int32) AppendRow(v any) error {
 	switch v := v.(type) {
 	case int32:
 		col.col.Append(v)
@@ -924,7 +1065,21 @@ func (col *Int32) AppendRow(v interface{}) error {
 			col.col.Append(0)
 		}
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "Int32",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(int32))
 		} else {
 			return &ColumnConverterError{
@@ -965,7 +1120,7 @@ func (col *Int64) Reset() {
 	col.col.Reset()
 }
 
-func (col *Int64) ScanRow(dest interface{}, row int) error {
+func (col *Int64) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *int64:
@@ -991,7 +1146,7 @@ func (col *Int64) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *Int64) Row(i int, ptr bool) interface{} {
+func (col *Int64) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -999,7 +1154,7 @@ func (col *Int64) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *Int64) Append(v interface{}) (nulls []uint8, err error) {
+func (col *Int64) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []int64:
 		nulls = make([]uint8, len(v))
@@ -1031,6 +1186,20 @@ func (col *Int64) Append(v interface{}) (nulls []uint8, err error) {
 			col.AppendRow(v[i])
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "Int64",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "Int64",
@@ -1040,7 +1209,7 @@ func (col *Int64) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *Int64) AppendRow(v interface{}) error {
+func (col *Int64) AppendRow(v any) error {
 	switch v := v.(type) {
 	case int64:
 		col.col.Append(v)
@@ -1072,7 +1241,21 @@ func (col *Int64) AppendRow(v interface{}) error {
 	case *time.Duration:
 		col.col.Append(int64(*v))
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "Int64",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(int64))
 		} else {
 			return &ColumnConverterError{
@@ -1113,7 +1296,7 @@ func (col *UInt8) Reset() {
 	col.col.Reset()
 }
 
-func (col *UInt8) ScanRow(dest interface{}, row int) error {
+func (col *UInt8) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *uint8:
@@ -1121,6 +1304,13 @@ func (col *UInt8) ScanRow(dest interface{}, row int) error {
 	case **uint8:
 		*d = new(uint8)
 		**d = value
+	case *bool:
+		switch value {
+		case 0:
+			*d = false
+		default:
+			*d = true
+		}
 	default:
 		if scan, ok := dest.(sql.Scanner); ok {
 			return scan.Scan(value)
@@ -1135,7 +1325,7 @@ func (col *UInt8) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *UInt8) Row(i int, ptr bool) interface{} {
+func (col *UInt8) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -1143,7 +1333,7 @@ func (col *UInt8) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *UInt8) Append(v interface{}) (nulls []uint8, err error) {
+func (col *UInt8) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []uint8:
 		nulls = make([]uint8, len(v))
@@ -1162,6 +1352,20 @@ func (col *UInt8) Append(v interface{}) (nulls []uint8, err error) {
 			}
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "UInt8",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "UInt8",
@@ -1171,7 +1375,7 @@ func (col *UInt8) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *UInt8) AppendRow(v interface{}) error {
+func (col *UInt8) AppendRow(v any) error {
 	switch v := v.(type) {
 	case uint8:
 		col.col.Append(v)
@@ -1191,7 +1395,21 @@ func (col *UInt8) AppendRow(v interface{}) error {
 		}
 		col.col.Append(t)
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "UInt8",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(uint8))
 		} else {
 			return &ColumnConverterError{
@@ -1232,7 +1450,7 @@ func (col *UInt16) Reset() {
 	col.col.Reset()
 }
 
-func (col *UInt16) ScanRow(dest interface{}, row int) error {
+func (col *UInt16) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *uint16:
@@ -1254,7 +1472,7 @@ func (col *UInt16) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *UInt16) Row(i int, ptr bool) interface{} {
+func (col *UInt16) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -1262,7 +1480,7 @@ func (col *UInt16) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *UInt16) Append(v interface{}) (nulls []uint8, err error) {
+func (col *UInt16) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []uint16:
 		nulls = make([]uint8, len(v))
@@ -1281,6 +1499,20 @@ func (col *UInt16) Append(v interface{}) (nulls []uint8, err error) {
 			}
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "UInt16",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "UInt16",
@@ -1290,7 +1522,7 @@ func (col *UInt16) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *UInt16) AppendRow(v interface{}) error {
+func (col *UInt16) AppendRow(v any) error {
 	switch v := v.(type) {
 	case uint16:
 		col.col.Append(v)
@@ -1304,7 +1536,21 @@ func (col *UInt16) AppendRow(v interface{}) error {
 	case nil:
 		col.col.Append(0)
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "UInt16",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(uint16))
 		} else {
 			return &ColumnConverterError{
@@ -1345,7 +1591,7 @@ func (col *UInt32) Reset() {
 	col.col.Reset()
 }
 
-func (col *UInt32) ScanRow(dest interface{}, row int) error {
+func (col *UInt32) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *uint32:
@@ -1367,7 +1613,7 @@ func (col *UInt32) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *UInt32) Row(i int, ptr bool) interface{} {
+func (col *UInt32) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -1375,7 +1621,7 @@ func (col *UInt32) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *UInt32) Append(v interface{}) (nulls []uint8, err error) {
+func (col *UInt32) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []uint32:
 		nulls = make([]uint8, len(v))
@@ -1394,6 +1640,20 @@ func (col *UInt32) Append(v interface{}) (nulls []uint8, err error) {
 			}
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "UInt32",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "UInt32",
@@ -1403,7 +1663,7 @@ func (col *UInt32) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *UInt32) AppendRow(v interface{}) error {
+func (col *UInt32) AppendRow(v any) error {
 	switch v := v.(type) {
 	case uint32:
 		col.col.Append(v)
@@ -1417,7 +1677,21 @@ func (col *UInt32) AppendRow(v interface{}) error {
 	case nil:
 		col.col.Append(0)
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "UInt32",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(uint32))
 		} else {
 			return &ColumnConverterError{
@@ -1458,7 +1732,7 @@ func (col *UInt64) Reset() {
 	col.col.Reset()
 }
 
-func (col *UInt64) ScanRow(dest interface{}, row int) error {
+func (col *UInt64) ScanRow(dest any, row int) error {
 	value := col.col.Row(row)
 	switch d := dest.(type) {
 	case *uint64:
@@ -1480,7 +1754,7 @@ func (col *UInt64) ScanRow(dest interface{}, row int) error {
 	return nil
 }
 
-func (col *UInt64) Row(i int, ptr bool) interface{} {
+func (col *UInt64) Row(i int, ptr bool) any {
 	value := col.col.Row(i)
 	if ptr {
 		return &value
@@ -1488,7 +1762,7 @@ func (col *UInt64) Row(i int, ptr bool) interface{} {
 	return value
 }
 
-func (col *UInt64) Append(v interface{}) (nulls []uint8, err error) {
+func (col *UInt64) Append(v any) (nulls []uint8, err error) {
 	switch v := v.(type) {
 	case []uint64:
 		nulls = make([]uint8, len(v))
@@ -1507,6 +1781,20 @@ func (col *UInt64) Append(v interface{}) (nulls []uint8, err error) {
 			}
 		}
 	default:
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return nil, &ColumnConverterError{
+					Op:   "Append",
+					To:   "UInt64",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.Append(val)
+		}
+
 		return nil, &ColumnConverterError{
 			Op:   "Append",
 			To:   "UInt64",
@@ -1516,7 +1804,7 @@ func (col *UInt64) Append(v interface{}) (nulls []uint8, err error) {
 	return
 }
 
-func (col *UInt64) AppendRow(v interface{}) error {
+func (col *UInt64) AppendRow(v any) error {
 	switch v := v.(type) {
 	case uint64:
 		col.col.Append(v)
@@ -1530,7 +1818,21 @@ func (col *UInt64) AppendRow(v interface{}) error {
 	case nil:
 		col.col.Append(0)
 	default:
-		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() && rv.CanConvert(col.ScanType()) {
+
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   "UInt64",
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if rv := reflect.ValueOf(v); rv.Kind() == col.ScanType().Kind() || rv.CanConvert(col.ScanType()) {
 			col.col.Append(rv.Convert(col.ScanType()).Interface().(uint64))
 		} else {
 			return &ColumnConverterError{
