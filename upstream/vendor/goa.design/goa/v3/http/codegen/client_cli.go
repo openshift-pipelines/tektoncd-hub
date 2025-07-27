@@ -14,8 +14,8 @@ type commandData struct {
 	*cli.CommandData
 	// Subcommands is the list of endpoint commands.
 	Subcommands []*subcommandData
-	// NeedStream if true initializes the websocket dialer.
-	NeedStream bool
+	// NeedDialer if true initializes the websocket dialer.
+	NeedDialer bool
 }
 
 // commandData wraps the common SubcommandData and adds HTTP-specific fields.
@@ -24,7 +24,7 @@ type subcommandData struct {
 	// MultipartFuncName is the name of the function used to render a multipart
 	// request encoder.
 	MultipartFuncName string
-	// MultipartFuncName is the name of the variabl used to render a multipart
+	// MultipartFuncName is the name of the variable used to render a multipart
 	// request encoder.
 	MultipartVarName string
 	// StreamFlag is the flag used to identify the file to be streamed when
@@ -50,7 +50,7 @@ func ClientCLIFiles(genpkg string, root *expr.RootExpr) []*codegen.File {
 		if len(sd.Endpoints) > 0 {
 			command := &commandData{
 				CommandData: cli.BuildCommandData(sd.Service),
-				NeedStream:  hasWebSocket(sd),
+				NeedDialer:  hasWebSocket(sd),
 			}
 
 			for _, e := range sd.Endpoints {
@@ -87,7 +87,7 @@ func buildSubcommandData(sd *ServiceData, e *EndpointData) *subcommandData {
 	flags, buildFunction := buildFlags(sd, e)
 
 	sub := &subcommandData{
-		SubcommandData: cli.BuildSubcommandData(sd.Service.Name, e.Method, buildFunction, flags),
+		SubcommandData: cli.BuildSubcommandData(sd.Service, e.Method, buildFunction, flags),
 	}
 	if e.MultipartRequestEncoder != nil {
 		sub.MultipartVarName = e.MultipartRequestEncoder.VarName
@@ -127,6 +127,13 @@ func endpointParser(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr, da
 			Path: genpkg + "/http/" + sd.Service.PathName + "/client",
 			Name: sd.Service.PkgName + "c",
 		})
+		// Add interceptors import if service has client interceptors
+		if len(sd.Service.ClientInterceptors) > 0 {
+			specs = append(specs, &codegen.ImportSpec{
+				Path: genpkg + "/" + sd.Service.PathName,
+				Name: sd.Service.PkgName,
+			})
+		}
 	}
 
 	cliData := make([]*cli.CommandData, len(data))
@@ -285,7 +292,7 @@ func streamFlag(svcn, en string) *cli.FlagData {
 // uses stream for sending payload/result.
 func streamingCmdExists(data []*commandData) bool {
 	for _, c := range data {
-		if c.NeedStream {
+		if c.NeedDialer {
 			return true
 		}
 	}
