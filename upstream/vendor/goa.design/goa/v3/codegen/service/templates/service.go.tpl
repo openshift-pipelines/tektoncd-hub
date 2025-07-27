@@ -3,6 +3,9 @@
 type Service interface {
 {{- range .Methods }}
 	{{ comment .Description }}
+	{{- if .SkipResponseBodyEncodeDecode }}
+	{{ comment "\nIf body implements [io.WriterTo], that implementation will be used instead. Consider [goa.design/goa/v3/pkg.SkipResponseWriter] to adapt existing implementations." }}
+	{{- end }}
 	{{- if .ViewedResult }}
 		{{- if not .ViewedResult.ViewName }}
 			{{ comment "The \"view\" return value must have one of the following views" }}
@@ -26,7 +29,7 @@ type Service interface {
 {{- if .Schemes }}
 // Auther defines the authorization functions to be implemented by the service.
 type Auther interface {
-	{{- range .Schemes }}
+	{{- range .Schemes.DedupeByType }}
 	{{ printf "%sAuth implements the authorization logic for the %s security scheme." .Type .Type | comment }}
 	{{ .Type }}Auth(ctx context.Context, {{ if eq .Type "Basic" }}user, pass{{ else if eq .Type "APIKey" }}key{{ else }}token{{ end }} string, schema *security.{{ .Type }}Scheme) (context.Context, error)
 	{{- end }}
@@ -61,10 +64,14 @@ type {{ .Stream.Interface }} interface {
 	{{- if .Stream.SendTypeRef }}
 		{{ comment .Stream.SendDesc }}
 		{{ .Stream.SendName }}({{ .Stream.SendTypeRef }}) error
+		{{ comment .Stream.SendWithContextDesc }}
+		{{ .Stream.SendWithContextName }}(context.Context, {{ .Stream.SendTypeRef }}) error
 	{{- end }}
 	{{- if .Stream.RecvTypeRef }}
 		{{ comment .Stream.RecvDesc }}
 		{{ .Stream.RecvName }}() ({{ .Stream.RecvTypeRef }}, error)
+		{{ comment .Stream.RecvWithContextDesc }}
+		{{ .Stream.RecvWithContextName }}(context.Context) ({{ .Stream.RecvTypeRef }}, error)
 	{{- end }}
 	{{- if .Stream.MustClose }}
 		{{ comment "Close closes the stream." }}

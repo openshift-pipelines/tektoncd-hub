@@ -68,28 +68,28 @@ func exampleServiceFile(genpkg string, _ *expr.RootExpr, svc *expr.ServiceExpr, 
 	specs := []*codegen.ImportSpec{
 		{Path: "io"},
 		{Path: "context"},
-		{Path: "log"},
 		{Path: "fmt"},
 		{Path: "strings"},
 		{Path: path.Join(genpkg, svcName), Name: data.PkgName},
+		{Path: "goa.design/clue/log"},
 		{Path: "goa.design/goa/v3/security"},
 	}
 	sections := []*codegen.SectionTemplate{
 		codegen.Header("", apipkg, specs),
 		{
 			Name:   "basic-service-struct",
-			Source: readTemplate("service_struct"),
+			Source: readTemplate("example_service_struct"),
 			Data:   data,
 		}, {
 			Name:   "basic-service-init",
-			Source: readTemplate("service_init"),
+			Source: readTemplate("example_service_init"),
 			Data:   data,
 		},
 	}
 	if len(data.Schemes) > 0 {
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "security-authfuncs",
-			Source: readTemplate("security_authfuncs"),
+			Source: readTemplate("example_security_authfuncs"),
 			Data:   data,
 		})
 	}
@@ -120,9 +120,9 @@ func basicEndpointSection(m *expr.MethodExpr, svcData *Data) *codegen.SectionTem
 		ed.ResultFullRef = svcData.Scope.GoFullTypeRef(m.Result, svcData.PkgName)
 		ed.ResultIsStruct = expr.IsObject(m.Result.Type)
 		if md.ViewedResult != nil {
-			view := "default"
-			if v, ok := m.Result.Meta["view"]; ok {
-				view = v[0]
+			view := expr.DefaultView
+			if v, ok := m.Result.Meta.Last(expr.ViewMetaKey); ok {
+				view = v
 			}
 			ed.ResultView = view
 		}

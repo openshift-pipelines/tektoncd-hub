@@ -212,6 +212,7 @@ func (a *AttributeExpr) Validate(ctx string, parent eval.Expression) *eval.Valid
 	if v := a.Validation; v != nil {
 		verr.Merge(v.Validate(ctx, parent))
 	}
+	verr.Merge(a.validateExamples(ctx, parent))
 	if o := AsObject(a.Type); o != nil {
 		for _, n := range a.AllRequired() {
 			if a.Find(n) == nil {
@@ -243,21 +244,21 @@ func (a *AttributeExpr) Validate(ctx string, parent eval.Expression) *eval.Valid
 		}
 	}
 
-	if views, ok := a.Meta["view"]; ok {
+	if view, ok := a.Meta.Last(ViewMetaKey); ok {
 		rt, ok := a.Type.(*ResultTypeExpr)
 		if !ok {
-			verr.Add(parent, "%s uses view %q but %q is not a result type", ctx, views[0], a.Type.Name())
+			verr.Add(parent, "%s uses view %q but %q is not a result type", ctx, view, a.Type.Name())
 		}
-		if name := views[0]; name != "default" && rt != nil {
+		if view != DefaultView && rt != nil {
 			found := false
 			for _, v := range rt.Views {
-				if v.Name == name {
+				if v.Name == view {
 					found = true
 					break
 				}
 			}
 			if !found {
-				verr.Add(parent, "%s: type %q does not define view %q", ctx, a.Type.Name(), name)
+				verr.Add(parent, "%s: type %q does not define view %q", ctx, a.Type.Name(), view)
 			}
 		}
 	}
@@ -297,8 +298,12 @@ func (a *AttributeExpr) Finalize() {
 		return // Avoid infinite recursion.
 	}
 	a.finalized = true
+	var pkgPath string
 	if ut, ok := a.Type.(UserType); ok {
 		ut.Finalize()
+		if meta, ok := ut.Attribute().Meta["struct:pkg:path"]; ok {
+			pkgPath = meta[0]
+		}
 	}
 	switch {
 	case IsObject(a.Type):
@@ -316,12 +321,12 @@ func (a *AttributeExpr) Finalize() {
 			}
 			a.Merge(ru.Attribute())
 		}
-		var pkgPath string
-		if ut, ok := a.Type.(UserType); ok {
-			if meta, ok := ut.Attribute().Meta["struct:pkg:path"]; ok {
-				pkgPath = meta[0]
-			}
-		}
+
+		// Now that we've merged the bases, we can clear them.  This
+		// avoids issues where the bases are dupped and modifications
+		// made to the originals are not reflected in the dups.
+		a.Bases = nil
+
 		for _, nat := range *AsObject(a.Type) {
 			if pkgPath != "" {
 				if u := AsUnion(nat.Attribute.Type); u != nil {
@@ -660,7 +665,7 @@ func (a *AttributeExpr) debug(prefix string, seen map[*AttributeExpr]int, indent
 	if rt, ok := a.Type.(*ResultTypeExpr); ok {
 		fmt.Printf("%s%sviews\n", tabs, tab)
 		for _, v := range rt.Views {
-			nats := *AsObject(v.AttributeExpr.Type)
+			nats := *AsObject(v.Type)
 			keys := make([]string, len(nats))
 			for i, n := range nats {
 				keys[i] = n.Name
@@ -725,6 +730,18 @@ func (a *AttributeExpr) validateEnumDefault(ctx string, parent eval.Expression) 
 				a.DefaultValue,
 				a.Validation.Values,
 			)
+		}
+	}
+	return verr
+}
+
+// validateExamples makes sure that the attribute example values are compatible
+// with the attribute type.
+func (a *AttributeExpr) validateExamples(ctx string, parent eval.Expression) *eval.ValidationErrors {
+	verr := new(eval.ValidationErrors)
+	for _, ex := range a.UserExamples {
+		if !a.Type.IsCompatible(ex.Value) { // DSL ensures ex.Value is not nil
+			verr.Add(parent, "%sexample value %#v is incompatible with type %s", ctx, ex.Value, a.Type.Name())
 		}
 	}
 	return verr

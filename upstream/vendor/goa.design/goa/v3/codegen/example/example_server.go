@@ -35,7 +35,6 @@ func exampleSvrMain(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr) *c
 		{Path: "context"},
 		{Path: "flag"},
 		{Path: "fmt"},
-		{Path: "log"},
 		{Path: "net"},
 		{Path: "net/url"},
 		{Path: "os"},
@@ -44,20 +43,24 @@ func exampleSvrMain(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr) *c
 		{Path: "sync"},
 		{Path: "syscall"},
 		{Path: "time"},
-		codegen.GoaImport("middleware"),
+		{Path: "goa.design/clue/debug"},
+		{Path: "goa.design/clue/log"},
 	}
 
 	// Iterate through services listed in the server expression.
 	svcData := make([]*service.Data, len(svr.Services))
 	scope := codegen.NewNameScope()
+	hasInterceptors := false
 	for i, svc := range svr.Services {
 		sd := service.Services.Get(svc)
 		svcData[i] = sd
 		specs = append(specs, &codegen.ImportSpec{
 			Path: path.Join(genpkg, sd.PathName),
-			Name: scope.Unique(sd.PkgName),
+			Name: scope.Unique(sd.PkgName, "svc"),
 		})
+		hasInterceptors = hasInterceptors || len(sd.ServerInterceptors) > 0
 	}
+	interPkg := scope.Unique("interceptors", "ex")
 
 	var (
 		rootPath string
@@ -73,6 +76,9 @@ func exampleSvrMain(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr) *c
 		apiPkg = scope.Unique(strings.ToLower(codegen.Goify(root.API.Name, false)), "api")
 	}
 	specs = append(specs, &codegen.ImportSpec{Path: rootPath, Name: apiPkg})
+	if hasInterceptors {
+		specs = append(specs, &codegen.ImportSpec{Path: path.Join(rootPath, "interceptors"), Name: interPkg})
+	}
 
 	sections := []*codegen.SectionTemplate{
 		codegen.Header("", "main", specs),
@@ -97,6 +103,18 @@ func exampleSvrMain(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr) *c
 			Data: map[string]any{
 				"APIPkg":   apiPkg,
 				"Services": svcData,
+			},
+			FuncMap: map[string]any{
+				"mustInitServices": mustInitServices,
+			},
+		}, {
+			Name:   "server-main-interceptors",
+			Source: readTemplate("server_interceptors"),
+			Data: map[string]any{
+				"APIPkg":          apiPkg,
+				"InterPkg":        interPkg,
+				"Services":        svcData,
+				"HasInterceptors": hasInterceptors,
 			},
 			FuncMap: map[string]any{
 				"mustInitServices": mustInitServices,

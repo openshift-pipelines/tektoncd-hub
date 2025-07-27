@@ -33,14 +33,14 @@ func exampleServer(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr) *co
 	fpath := filepath.Join("cmd", svrdata.Dir, "http.go")
 	specs := []*codegen.ImportSpec{
 		{Path: "context"},
-		{Path: "log"},
 		{Path: "net/http"},
 		{Path: "net/url"},
 		{Path: "os"},
 		{Path: "sync"},
 		{Path: "time"},
 		codegen.GoaNamedImport("http", "goahttp"),
-		codegen.GoaNamedImport("http/middleware", "httpmdlwr"),
+		{Path: "goa.design/clue/debug"},
+		{Path: "goa.design/clue/log"},
 		codegen.GoaImport("middleware"),
 		{Path: "github.com/gorilla/websocket"},
 	}
@@ -91,10 +91,6 @@ func exampleServer(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr) *co
 			},
 		},
 		{
-			Name:   "server-http-logger",
-			Source: readTemplate("server_logger"),
-		},
-		{
 			Name:   "server-http-encoding",
 			Source: readTemplate("server_encoding"),
 		},
@@ -109,7 +105,7 @@ func exampleServer(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr) *co
 				"Services": svcdata,
 				"APIPkg":   apiPkg,
 			},
-			FuncMap: map[string]any{"needStream": needStream, "hasWebSocket": hasWebSocket},
+			FuncMap: map[string]any{"needDialer": needDialer, "hasWebSocket": hasWebSocket},
 		},
 		{
 			Name:   "server-http-middleware",

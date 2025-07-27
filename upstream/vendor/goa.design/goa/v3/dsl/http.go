@@ -1,7 +1,6 @@
 package dsl
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -146,7 +145,7 @@ const (
 //	})
 func HTTP(fns ...func()) {
 	if len(fns) > 1 {
-		eval.InvalidArgError("zero or one function", fmt.Sprintf("%d functions", len(fns)))
+		eval.TooManyArgError()
 		return
 	}
 	fn := func() {}
@@ -234,7 +233,7 @@ func Produces(args ...string) {
 // As a special case, if you want to generate a path with a trailing slash, you can use
 // GET("/./") to generate a path such as '/foo/'.
 //
-// Path must appear in a API HTTP expression or a Service HTTP expression.
+// Path must appear in an API HTTP expression or a Service HTTP expression.
 //
 // Path accepts one argument: the HTTP path prefix.
 func Path(val string) {
@@ -667,6 +666,7 @@ func Params(args any) {
 // Example:
 //
 //	var ShowPayload = Type("ShowPayload", func() {
+//	    Attribute("parentID", UInt64, "ID of parent account")
 //	    Attribute("id", UInt64, "Account ID")
 //	    Attribute("version", String, "Version", func() {
 //	        Enum("1.0", "2.0")
@@ -675,8 +675,8 @@ func Params(args any) {
 //
 //	var _ = Service("account", func() {
 //	    HTTP(func() {
-//	        Path("/{parentID}")
-//	        Param("parentID", UInt64, "ID of parent account")
+//	        Path("/{parentID}") // HTTP request uses ShowPayload "parentID"
+//	        // attribute to define "parentID" parameter.
 //	    })
 //	    Method("show", func() {  // default response type.
 //	        Payload(ShowPayload)
@@ -743,7 +743,8 @@ func Param(name string, args ...any) {
 //	})
 func MapParams(args ...any) {
 	if len(args) > 1 {
-		eval.ReportError("too many arguments")
+		eval.TooManyArgError()
+		return
 	}
 	e, ok := eval.Current().(*expr.HTTPEndpointExpr)
 	if !ok {
@@ -754,7 +755,7 @@ func MapParams(args ...any) {
 	if len(args) > 0 {
 		mapName, ok = args[0].(string)
 		if !ok {
-			eval.ReportError("argument must be a string")
+			eval.InvalidArgError("string", args[0])
 		}
 	}
 	e.MapQueryParams = &mapName
@@ -894,7 +895,7 @@ func SkipResponseBodyEncodeDecode() {
 //	})
 func Body(args ...any) {
 	if len(args) == 0 {
-		eval.ReportError("not enough arguments, use Body(name), Body(type), Body(func()) or Body(type, func())")
+		eval.TooFewArgError()
 		return
 	}
 
@@ -913,7 +914,7 @@ func Body(args ...any) {
 		}
 		kind = "Request"
 	case *expr.HTTPErrorExpr:
-		ref = e.ErrorExpr.AttributeExpr
+		ref = e.AttributeExpr
 		setter = func(att *expr.AttributeExpr) {
 			if e.Response == nil {
 				e.Response = &expr.HTTPResponseExpr{}
@@ -947,6 +948,10 @@ func Body(args ...any) {
 	)
 	switch a := args[0].(type) {
 	case string:
+		if ref == nil {
+			eval.ReportError("Body is set but %s is not defined", kind)
+			return
+		}
 		if !expr.IsObject(ref.Type) {
 			eval.ReportError("%s type must be an object with an attribute with name %#v, got %T", kind, a, ref.Type)
 			return
@@ -958,16 +963,17 @@ func Body(args ...any) {
 		}
 		attr = expr.DupAtt(attr)
 		attr.AddMeta("origin:attribute", a)
-		if rt, ok := attr.Type.(*expr.ResultTypeExpr); ok {
-			// If the attribute type is a result type add the type to the
+		if rt, ok := attr.Type.(*expr.ResultTypeExpr); ok && expr.IsArray(rt.Type) {
+			// If the attribute type is a result type collection add the type to the
 			// GeneratedTypes so that the type's DSLFunc is executed.
-			*expr.Root.GeneratedTypes = append(*expr.Root.GeneratedTypes, rt)
+			expr.GeneratedResultTypes.Append(rt)
 		}
 		if len(args) > 1 {
 			var ok bool
 			fn, ok = args[1].(func())
 			if !ok {
-				eval.ReportError("second argument must be a function")
+				eval.InvalidArgError("function", args[1])
+				return
 			}
 		}
 	case expr.UserType:
@@ -976,7 +982,8 @@ func Body(args ...any) {
 			var ok bool
 			fn, ok = args[1].(func())
 			if !ok {
-				eval.ReportError("second argument must be a function")
+				eval.InvalidArgError("function", args[1])
+				return
 			}
 		}
 	case func():
@@ -1161,7 +1168,7 @@ func cookies(exp eval.Expression) *expr.MappedAttributeExpr {
 }
 
 // params returns the mapped attribute containing the path and query params for
-// the given expression if it's either the root, a API server, a service or an
+// the given expression if it's either the root, an API server, a service or an
 // endpoint - nil otherwise.
 func params(exp eval.Expression) *expr.MappedAttributeExpr {
 	switch e := exp.(type) {

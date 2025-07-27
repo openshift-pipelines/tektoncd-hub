@@ -56,10 +56,10 @@ var (
 // NOTE: can't initialize inline because https://github.com/golang/go/issues/1817
 func init() {
 	fm := template.FuncMap{"transformAttribute": transformAttribute, "convertType": convertType}
-	transformGoArrayT = template.Must(template.New("transformGoArray").Funcs(fm).Parse(transformGoArrayTmpl))
-	transformGoMapT = template.Must(template.New("transformGoMap").Funcs(fm).Parse(transformGoMapTmpl))
-	transformGoUnionToProtoT = template.Must(template.New("transformGoUnionToProto").Funcs(fm).Parse(transformGoUnionToProtoTmpl))
-	transformGoUnionFromProtoT = template.Must(template.New("transformGoUnionFromProto").Funcs(fm).Parse(transformGoUnionFromProtoTmpl))
+	transformGoArrayT = template.Must(template.New("transformGoArray").Funcs(fm).Parse(readTemplate("transform_go_array")))
+	transformGoMapT = template.Must(template.New("transformGoMap").Funcs(fm).Parse(readTemplate("transform_go_map")))
+	transformGoUnionToProtoT = template.Must(template.New("transformGoUnionToProto").Funcs(fm).Parse(readTemplate("transform_go_union_to_proto")))
+	transformGoUnionFromProtoT = template.Must(template.New("transformGoUnionFromProto").Funcs(fm).Parse(readTemplate("transform_go_union_from_proto")))
 }
 
 // protoBufTransform produces Go code to initialize a data structure defined
@@ -85,12 +85,12 @@ func protoBufTransform(source, target *expr.AttributeExpr, sourceVar, targetVar 
 	if proto {
 		target = expr.DupAtt(target)
 		removeMeta(target)
-		ta.TransformAttrs.Prefix = "svc"
+		ta.Prefix = "svc"
 		ta.proto = true
 	} else {
 		source = expr.DupAtt(source)
 		removeMeta(source)
-		ta.TransformAttrs.Prefix = "protobuf"
+		ta.Prefix = "protobuf"
 		ta.proto = false
 	}
 
@@ -268,7 +268,7 @@ func transformObject(source, target *expr.AttributeExpr, sourceVar, targetVar st
 		assign = ":="
 	}
 	tname := ta.TargetCtx.Scope.Name(target, ta.TargetCtx.Pkg(target), ta.TargetCtx.Pointer, ta.TargetCtx.UseDefault)
-	buffer.WriteString(fmt.Sprintf("%s %s %s%s{%s}\n", targetVar, assign, deref, tname, initCode))
+	fmt.Fprintf(buffer, "%s %s %s%s{%s}\n", targetVar, assign, deref, tname, initCode)
 	buffer.WriteString(postInitCode)
 
 	// iterate through attributes to initialize rest of the struct fields and
@@ -963,37 +963,3 @@ func dupTransformAttrs(ta *transformAttrs) *transformAttrs {
 		message:        ta.message,
 	}
 }
-
-const (
-	transformGoArrayTmpl = `{{ .TargetVar }} {{ if .NewVar }}:={{ else }}={{ end }} make([]{{ .ElemTypeRef }}, len({{ .SourceVar }})) 
-for {{ .LoopVar }}{{ if .ValVar }}, {{ .ValVar }}{{ end }} := range {{ .SourceVar }} {
-  {{ transformAttribute .SourceElem .TargetElem "val" (printf "%s[%s]" .TargetVar .LoopVar) false .TransformAttrs -}}
-}
-`
-
-	transformGoMapTmpl = `{{ .TargetVar }} {{ if .NewVar }}:={{ else }}={{ end }} make(map[{{ .KeyTypeRef }}]{{ .ElemTypeRef }}, len({{ .SourceVar }}))
-for key, val := range {{ .SourceVar }} {
-  {{ transformAttribute .SourceKey .TargetKey "key" "tk" true .TransformAttrs -}}
-  {{ transformAttribute .SourceElem .TargetElem "val" (printf "tv%s" .LoopVar) true .TransformAttrs -}}
-  {{ .TargetVar }}[tk] = {{ printf "tv%s" .LoopVar }}
-}
-`
-
-	transformGoUnionToProtoTmpl = `switch src := {{ .SourceVar }}.(type) {
-{{- range $i, $ref := .SourceValueTypeRefs }}
-case {{ . }}:
-		{{- $val := (convertType (index $.SourceValues $i).Attribute (index $.TargetValues $i).Attribute false false "src" $.TransformAttrs) }}
-		{{ $.TargetVar }} = &{{ index $.TargetValueTypeNames $i }}{ {{ (index $.TargetFieldNames $i) }}: {{ $val }} }
-{{- end }}
-}
-`
-
-	transformGoUnionFromProtoTmpl = `switch val := {{ .SourceVar }}.(type) {
-{{- range $i, $ref := .SourceValueTypeRefs }}
-case {{ . }}:
-	{{- $field := (print "val." (index $.SourceFieldNames $i)) }}
-	{{ $.TargetVar }} = {{ convertType (index $.SourceValues $i).Attribute (index $.TargetValues $i).Attribute false false $field $.TransformAttrs }}
-{{- end }}
-}
-`
-)

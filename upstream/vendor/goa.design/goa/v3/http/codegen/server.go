@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -19,6 +20,9 @@ func ServerFiles(genpkg string, root *expr.RootExpr) []*codegen.File {
 		if f := websocketServerFile(genpkg, svc); f != nil {
 			files = append(files, f)
 		}
+		if f := sseServerFile(genpkg, svc); f != nil {
+			files = append(files, f)
+		}
 	}
 	for _, svc := range root.API.HTTP.Services {
 		if f := serverEncodeDecodeFile(genpkg, svc); f != nil {
@@ -32,16 +36,17 @@ func ServerFiles(genpkg string, root *expr.RootExpr) []*codegen.File {
 func serverFile(genpkg string, svc *expr.HTTPServiceExpr) *codegen.File {
 	data := HTTPServices.Get(svc.Name())
 	svcName := data.Service.PathName
-	path := filepath.Join(codegen.Gendir, "http", svcName, "server", "server.go")
+	fpath := filepath.Join(codegen.Gendir, "http", svcName, "server", "server.go")
 	title := fmt.Sprintf("%s HTTP server", svc.Name())
 	funcs := map[string]any{
-		"join":                    strings.Join,
-		"hasWebSocket":            hasWebSocket,
-		"isWebSocketEndpoint":     isWebSocketEndpoint,
-		"viewedServerBody":        viewedServerBody,
-		"mustDecodeRequest":       mustDecodeRequest,
-		"addLeadingSlash":         addLeadingSlash,
-		"removeTrailingIndexHTML": removeTrailingIndexHTML,
+		"join":                strings.Join,
+		"hasWebSocket":        hasWebSocket,
+		"isWebSocketEndpoint": isWebSocketEndpoint,
+		"isSSEEndpoint":       isSSEEndpoint,
+		"viewedServerBody":    viewedServerBody,
+		"mustDecodeRequest":   mustDecodeRequest,
+		"addLeadingSlash":     addLeadingSlash,
+		"dir":                 path.Dir,
 	}
 	imports := []*codegen.ImportSpec{
 		{Path: "bufio"},
@@ -63,8 +68,9 @@ func serverFile(genpkg string, svc *expr.HTTPServiceExpr) *codegen.File {
 		codegen.Header(title, "server", imports),
 	}
 
-	sections = append(sections, &codegen.SectionTemplate{Name: "server-struct", Source: readTemplate("server_struct"), Data: data})
-	sections = append(sections, &codegen.SectionTemplate{Name: "server-mountpoint", Source: readTemplate("mount_point_struct"), Data: data})
+	sections = append(sections,
+		&codegen.SectionTemplate{Name: "server-struct", Source: readTemplate("server_struct"), Data: data},
+		&codegen.SectionTemplate{Name: "server-mountpoint", Source: readTemplate("mount_point_struct"), Data: data})
 
 	for _, e := range data.Endpoints {
 		if e.MultipartRequestDecoder != nil {
@@ -76,21 +82,39 @@ func serverFile(genpkg string, svc *expr.HTTPServiceExpr) *codegen.File {
 		}
 	}
 
-	sections = append(sections, &codegen.SectionTemplate{Name: "server-init", Source: readTemplate("server_init"), Data: data, FuncMap: funcs})
-	sections = append(sections, &codegen.SectionTemplate{Name: "server-service", Source: readTemplate("server_service"), Data: data})
-	sections = append(sections, &codegen.SectionTemplate{Name: "server-use", Source: readTemplate("server_use"), Data: data})
-	sections = append(sections, &codegen.SectionTemplate{Name: "server-method-names", Source: readTemplate("server_method_names"), Data: data})
-	sections = append(sections, &codegen.SectionTemplate{Name: "server-mount", Source: readTemplate("server_mount"), Data: data, FuncMap: funcs})
+	sections = append(sections,
+		&codegen.SectionTemplate{Name: "server-init", Source: readTemplate("server_init"), Data: data, FuncMap: funcs},
+		&codegen.SectionTemplate{Name: "server-service", Source: readTemplate("server_service"), Data: data},
+		&codegen.SectionTemplate{Name: "server-use", Source: readTemplate("server_use"), Data: data},
+		&codegen.SectionTemplate{Name: "server-method-names", Source: readTemplate("server_method_names"), Data: data},
+		&codegen.SectionTemplate{Name: "server-mount", Source: readTemplate("server_mount"), Data: data, FuncMap: funcs})
 
 	for _, e := range data.Endpoints {
-		sections = append(sections, &codegen.SectionTemplate{Name: "server-handler", Source: readTemplate("server_handler"), Data: e})
-		sections = append(sections, &codegen.SectionTemplate{Name: "server-handler-init", Source: readTemplate("server_handler_init"), FuncMap: funcs, Data: e})
+		sections = append(sections,
+			&codegen.SectionTemplate{Name: "server-handler", Source: readTemplate("server_handler"), Data: e},
+			&codegen.SectionTemplate{Name: "server-handler-init", Source: readTemplate("server_handler_init"), FuncMap: funcs, Data: e})
+	}
+	if len(data.FileServers) > 0 {
+		mappedFiles := make(map[string]string)
+		for _, fs := range data.FileServers {
+			if !fs.IsDir {
+				for _, p := range fs.RequestPaths {
+					baseFilePath := "/" + filepath.Base(fs.FilePath)
+					baseRequestPath := "/" + filepath.Base(p)
+					if baseFilePath == baseRequestPath {
+						continue
+					}
+					mappedFiles[baseRequestPath] = baseFilePath
+				}
+			}
+		}
+		sections = append(sections, &codegen.SectionTemplate{Name: "append-fs", Source: readTemplate("append_fs"), FuncMap: funcs, Data: mappedFiles})
 	}
 	for _, s := range data.FileServers {
 		sections = append(sections, &codegen.SectionTemplate{Name: "server-files", Source: readTemplate("file_server"), FuncMap: funcs, Data: s})
 	}
 
-	return &codegen.File{Path: path, SectionTemplates: sections}
+	return &codegen.File{Path: fpath, SectionTemplates: sections}
 }
 
 // serverEncodeDecodeFile returns the file defining the HTTP server encoding and
@@ -246,15 +270,8 @@ func viewedServerBody(sbd []*TypeData, view string) *TypeData {
 }
 
 func addLeadingSlash(s string) string {
-	if strings.HasPrefix(s, "/") {
-		return s
-	}
-	return "/" + s
-}
-
-func removeTrailingIndexHTML(s string) string {
-	if strings.HasSuffix(s, "/index.html") {
-		return strings.TrimSuffix(s, "index.html")
+	if s == "" || s[0] != '/' {
+		return "/" + s
 	}
 	return s
 }
