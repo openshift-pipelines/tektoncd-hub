@@ -430,7 +430,7 @@ github.com/hashicorp/hcl/json/token
 # github.com/ikawaha/goahttpcheck v1.15.9
 ## explicit; go 1.21.0
 github.com/ikawaha/goahttpcheck
-# github.com/ikawaha/httpcheck v1.12.3
+# github.com/ikawaha/httpcheck v1.12.4
 ## explicit; go 1.19
 github.com/ikawaha/httpcheck
 # github.com/imdario/mergo v0.3.13

@@ -1392,8 +1392,8 @@ github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:
 github.com/ianlancetaylor/demangle v0.0.0-20200824232613-28f6c0f3b639/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
 github.com/ikawaha/goahttpcheck v1.15.9 h1:48FGzZao+pMzTJkBfq2dN1esCX7UcEI0k3tGMhVnYRk=
 github.com/ikawaha/goahttpcheck v1.15.9/go.mod h1:/aae1N9RPrzqt6WEYq9qd2wAl/h40vmacDpUA90ZhdM=
-github.com/ikawaha/httpcheck v1.12.3 h1:OCDe3yCTZWKhubT5rNOef26ulykUxQRx/GqSGm5lYMs=
-github.com/ikawaha/httpcheck v1.12.3/go.mod h1:K+Oyw7JUcLcRGOvIj2kTEzwPpxMqpXaafHiKb7WsJ4Q=
+github.com/ikawaha/httpcheck v1.12.4 h1:TJ0csaV1Rcw8WdOWCMo22shntw7VvbB7c2ubj6HFG5E=
+github.com/ikawaha/httpcheck v1.12.4/go.mod h1:UVLEuAE4OixLO0n4mfjK7UZLNuo5IUrPEf9EikjmBmc=
 github.com/imdario/mergo v0.3.5/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
 github.com/imdario/mergo v0.3.8/go.mod h1:2EnlNZ0deacrJVfApfmtdGgDfMuh/nq6Ok1EcJh5FfA=
 github.com/imdario/mergo v0.3.10/go.mod h1:jmQim1M+e3UYxmgPu/WyfjB3N3VflVyUjjjwH0dnCYA=
