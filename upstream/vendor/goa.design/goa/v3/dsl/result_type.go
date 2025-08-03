@@ -116,6 +116,7 @@ func ResultType(identifier string, args ...any) *expr.ResultTypeExpr {
 	}
 	// Add the type to the generated types root for later evaluation.
 	rt := expr.NewResultTypeExpr(typeName, identifier, fn)
+	rt.Meta = expr.MetaExpr{"openapi:typename": []string{typeName}}
 	expr.Root.ResultTypes = append(expr.Root.ResultTypes, rt)
 
 	return rt
@@ -450,7 +451,7 @@ func Reference(t expr.DataType) {
 //	   })
 //	})
 //
-//	var UpdateBottlePayload = Type("UpatePayload", func() {
+//	var UpdateBottlePayload = Type("UpdatePayload", func() {
 //	    Attribute("id", String, "ID of bottle to update")
 //	    Extend(CreateBottlePayload) // Adds attributes "name" and "vintage"
 //	})
