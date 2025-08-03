@@ -2,11 +2,13 @@
 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/go-testfixtures/testfixtures/v3?tab=doc)](https://pkg.go.dev/github.com/go-testfixtures/testfixtures/v3?tab=doc)
 
-> ***Warning***: this package will wipe the database data before loading the
+> [!WARNING]
+> This package will wipe the database data before loading the
 fixtures! It is supposed to be used on a test database. Please, double check
 if you are running it against the correct database.
 
-> **TIP**: There are options not described in this README page. It's
+> [!NOTE]
+> There are options not described in this README page. It's
 > recommended that you also check [the documentation][doc].
 
 Writing tests is hard, even more when you have to deal with an SQL database.
@@ -288,6 +290,22 @@ testfixtures.New(
 )
 ```
 
+## Disable checksum computation
+
+Checksums of each table in a database are computed at the end of each `Load()`,
+so subsequent calls to `Load()` do not reload the same data again, if nothing
+has changed in between.
+
+The drawback is that it can be slow for database with many tables. Also, it does not
+make sense to compute checksum, if you run `Load()` only once.
+
+```go
+testfixtures.New(
+        ...
+        testfixtures.SkipTableChecksumComputation(),
+)
+```
+
 ## Sequences
 
 For PostgreSQL and MySQL/MariaDB, this package also resets all
@@ -383,9 +401,6 @@ Tested using the [github.com/lib/pq](https://github.com/lib/pq) and
 
 ### MySQL / MariaDB
 
-Just make sure the connection string have
-[the multistatement parameter](https://github.com/go-sql-driver/mysql#multistatements)
-set to true, and use:
 
 ```go
 testfixtures.New(
@@ -395,6 +410,20 @@ testfixtures.New(
 ```
 
 Tested using the [github.com/go-sql-driver/mysql](https://github.com/go-sql-driver/mysql) driver.
+
+#### Multistatements parameter
+
+You can use [the multistatement parameter](https://github.com/go-sql-driver/mysql#multistatements) in the connection
+string to execute some of the setup statements in one query (instead of one query per statement) for a faster execution.
+
+
+```go
+testfixtures.New(
+        ...
+        testfixtures.Dialect("mysql"), // or "mariadb"
+        testfixtures.AllowMultipleStatementsInOneQuery(),
+)
+```
 
 ### SQLite
 
@@ -437,6 +466,20 @@ testfixtures.New(
         testfixtures.Dialect("clickhouse"),
 )
 ```
+
+### Spanner with GoogleSQL Dialect
+
+It's impossible to get Spanner database name to determine whether it's a test database or not. You need to make sure that you're actually using test database and use `testfixtures.DangerousSkipTestDatabaseCheck()` to skip the check.
+
+```go
+testfixtures.New(
+        ...
+        testfixtures.Dialect("spanner"),
+        testfixtures.DangerousSkipTestDatabaseCheck(),
+)
+```
+
+ **Important:** Spanner's interleaved tables require specific insertion order to satisfy parent-child dependencies. For this reason, the `Directory()` and `Paths()` methods are not supported with Spanner as they load files alphabetically, which can violate interleaved table constraints. You must use `Files()` or `FilesMultiTables()` instead, ensuring parent tables are listed before their interleaved child tables in the file order, or that they are listed in the right order in a file that contains records for more than one table as supported by `FilesMultiTables()`.
 
 ## Templating
 
