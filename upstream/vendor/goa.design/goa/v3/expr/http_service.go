@@ -40,6 +40,9 @@ type (
 		HTTPErrors []*HTTPErrorExpr
 		// FileServers is the list of static asset serving endpoints
 		FileServers []*HTTPFileServerExpr
+		// SSE defines the Server-Sent Events configuration for all streaming endpoints
+		// in this service. If nil, streaming endpoints use WebSockets by default.
+		SSE *HTTPSSEExpr
 		// Meta is a set of key/value pairs with semantic that is
 		// specific to each generator.
 		Meta MetaExpr
@@ -82,12 +85,12 @@ func (svc *HTTPServiceExpr) EndpointFor(name string, m *MethodExpr) *HTTPEndpoin
 	if a := svc.Endpoint(name); a != nil {
 		return a
 	}
-	a := &HTTPEndpointExpr{
+	httpEndpoint := &HTTPEndpointExpr{
 		MethodExpr: m,
 		Service:    svc,
 	}
-	svc.HTTPEndpoints = append(svc.HTTPEndpoints, a)
-	return a
+	svc.HTTPEndpoints = append(svc.HTTPEndpoints, httpEndpoint)
+	return httpEndpoint
 }
 
 // CanonicalEndpoint returns the canonical endpoint of the service if any.
