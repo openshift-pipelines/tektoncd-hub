@@ -16,7 +16,7 @@ RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vend
     ./api/cmd/api
 
 FROM $RUNTIME
-ARG VERSION=hub-api-next
+ARG VERSION=hub-api-1.20.0
 
 RUN microdnf install -y openssh-clients git shadow-utils
 
