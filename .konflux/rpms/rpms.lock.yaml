@@ -1,6 +1,6 @@
 ---
 lockfileVersion: 1
-lockfileVendor: redhat
+lockfileVendor: redhat 
 arches:
 - arch: aarch64
   packages:
