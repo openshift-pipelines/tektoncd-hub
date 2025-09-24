@@ -29,6 +29,7 @@ LABEL \
     com.redhat.component="openshift-pipelines-hub-api-container" \
     name="openshift-pipelines/pipelines-hub-api-rhel9" \
     version=$VERSION \
+    cpe="cpe:/a:redhat:openshift_pipelines:1.18::el9" \
     summary="Red Hat OpenShift Pipelines Hub API" \
     maintainer="pipelines-extcomm@redhat.com" \
     description="Red Hat OpenShift Pipelines Hub API" \
