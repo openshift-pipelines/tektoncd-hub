@@ -26,7 +26,9 @@ EXPOSE 8000
 
 LABEL \
     com.redhat.component="openshift-pipelines-hub-api-container" \
+    cpe="cpe:/a:redhat:openshift_pipelines:1.14::el8" \
     name="openshift-pipelines/pipelines-hub-api-rhel8" \
+
     version=$VERSION \
     summary="Red Hat OpenShift Pipelines Hub API" \
     maintainer="pipelines-extcomm@redhat.com" \
