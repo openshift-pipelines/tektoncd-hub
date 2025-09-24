@@ -55,11 +55,14 @@ var (
 
 // NOTE: can't initialize inline because https://github.com/golang/go/issues/1817
 func init() {
-	fm := template.FuncMap{"transformAttribute": transformAttribute, "convertType": convertType}
-	transformGoArrayT = template.Must(template.New("transformGoArray").Funcs(fm).Parse(readTemplate("transform_go_array")))
-	transformGoMapT = template.Must(template.New("transformGoMap").Funcs(fm).Parse(readTemplate("transform_go_map")))
-	transformGoUnionToProtoT = template.Must(template.New("transformGoUnionToProto").Funcs(fm).Parse(readTemplate("transform_go_union_to_proto")))
-	transformGoUnionFromProtoT = template.Must(template.New("transformGoUnionFromProto").Funcs(fm).Parse(readTemplate("transform_go_union_from_proto")))
+	fm := template.FuncMap{
+		"transformAttribute": transformAttribute,
+		"convertType":        convertType,
+	}
+	transformGoArrayT = template.Must(template.New("transformGoArray").Funcs(fm).Parse(grpcTemplates.Read(grpcTransformGoArrayT)))
+	transformGoMapT = template.Must(template.New("transformGoMap").Funcs(fm).Parse(grpcTemplates.Read(grpcTransformGoMapT)))
+	transformGoUnionToProtoT = template.Must(template.New("transformGoUnionToProto").Funcs(fm).Parse(grpcTemplates.Read(grpcTransformGoUnionToProtoT)))
+	transformGoUnionFromProtoT = template.Must(template.New("transformGoUnionFromProto").Funcs(fm).Parse(grpcTemplates.Read(grpcTransformGoUnionFromProtoT)))
 }
 
 // protoBufTransform produces Go code to initialize a data structure defined
@@ -85,12 +88,12 @@ func protoBufTransform(source, target *expr.AttributeExpr, sourceVar, targetVar 
 	if proto {
 		target = expr.DupAtt(target)
 		removeMeta(target)
-		ta.TransformAttrs.Prefix = "svc"
+		ta.Prefix = "svc"
 		ta.proto = true
 	} else {
 		source = expr.DupAtt(source)
 		removeMeta(source)
-		ta.TransformAttrs.Prefix = "protobuf"
+		ta.Prefix = "protobuf"
 		ta.proto = false
 	}
 
@@ -185,6 +188,10 @@ func transformAttribute(source, target *expr.AttributeExpr, sourceVar, targetVar
 	if err != nil {
 		return "", err
 	}
+	// Ensure code ends with newline for proper formatting when used in templates
+	if code != "" && !strings.HasSuffix(code, "\n") {
+		code += "\n"
+	}
 	return initCode + code, nil
 }
 
@@ -268,7 +275,7 @@ func transformObject(source, target *expr.AttributeExpr, sourceVar, targetVar st
 		assign = ":="
 	}
 	tname := ta.TargetCtx.Scope.Name(target, ta.TargetCtx.Pkg(target), ta.TargetCtx.Pointer, ta.TargetCtx.UseDefault)
-	buffer.WriteString(fmt.Sprintf("%s %s %s%s{%s}\n", targetVar, assign, deref, tname, initCode))
+	fmt.Fprintf(buffer, "%s %s %s%s{%s}\n", targetVar, assign, deref, tname, initCode)
 	buffer.WriteString(postInitCode)
 
 	// iterate through attributes to initialize rest of the struct fields and
