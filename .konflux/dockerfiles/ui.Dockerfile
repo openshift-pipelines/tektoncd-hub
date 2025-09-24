@@ -51,4 +51,5 @@ LABEL \
     description="Red Hat OpenShift Pipelines Hub UI" \
     io.k8s.display-name="Red Hat OpenShift Pipelines Hub UI" \
     io.k8s.description="Red Hat OpenShift Pipelines Hub UI" \
-    io.openshift.tags="pipelines,tekton,openshift"
+    io.openshift.tags="pipelines,tekton,openshift" \
+    cpe="cpe:/a:redhat:openshift_pipelines:1.18::el9"
