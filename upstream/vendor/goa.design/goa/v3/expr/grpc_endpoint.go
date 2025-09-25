@@ -2,6 +2,7 @@ package expr
 
 import (
 	"fmt"
+	"slices"
 
 	"goa.design/goa/v3/eval"
 )
@@ -197,13 +198,7 @@ func (e *GRPCEndpointExpr) Validate() error {
 				// security attributes
 				var found bool
 				for _, nat := range *pobj {
-					found = false
-					for _, n := range secAttrs {
-						if n == nat.Name {
-							found = true
-							break
-						}
-					}
+					found = slices.Contains(secAttrs, nat.Name)
 					if !found {
 						msgFields.Set(nat.Name, nat.Attribute)
 					}
@@ -330,6 +325,17 @@ func (e *GRPCEndpointExpr) Finalize() {
 				nat.Attribute.Meta = patt.Meta
 			} else {
 				nat.Attribute.Meta.Merge(patt.Meta)
+			}
+		}
+		if ut, ok := e.MethodExpr.Payload.Type.(UserType); ok {
+			// propagate the user set protobuf struct name from the user type to
+			// the request message.
+			if proto, ok := ut.Attribute().Meta.Last("struct:name:proto"); ok {
+				if e.Request.Meta == nil {
+					e.Request.Meta = ut.Attribute().Meta
+				} else {
+					e.Request.Meta["struct:name:proto"] = []string{proto}
+				}
 			}
 		}
 	} else {
