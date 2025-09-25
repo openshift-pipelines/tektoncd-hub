@@ -23,6 +23,7 @@ proper schema versioning and migration rollback support.
 It supports any of the [databases Gorm supports](https://gorm.io/docs/connecting_to_the_database.html):
 
 - MySQL
+- MariaDB
 - PostgreSQL
 - SQLite
 - Microsoft SQL Server
@@ -111,7 +112,7 @@ func main() {
 		},
 	}})
 
-	if err = m.Migrate(); err != nil {
+	if err := m.Migrate(); err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
 	log.Println("Migration did run successfully")
@@ -211,6 +212,9 @@ Then:
 ```bash
 # run test for MySQL
 task test:mysql
+
+# run test for MariaDB
+task test:mariadb
 
 # run test for PostgreSQL
 task test:postgres
