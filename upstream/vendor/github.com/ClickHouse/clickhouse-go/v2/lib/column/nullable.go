@@ -20,9 +20,11 @@ package column
 import (
 	"database/sql"
 	"database/sql/driver"
-	"github.com/ClickHouse/ch-go/proto"
+	"fmt"
 	"reflect"
 	"time"
+
+	"github.com/ClickHouse/ch-go/proto"
 )
 
 type Nullable struct {
@@ -42,9 +44,9 @@ func (col *Nullable) Name() string {
 	return col.name
 }
 
-func (col *Nullable) parse(t Type, tz *time.Location) (_ *Nullable, err error) {
+func (col *Nullable) parse(t Type, sc *ServerContext) (_ *Nullable, err error) {
 	col.enable = true
-	if col.base, err = Type(t.params()).Column(col.name, tz); err != nil {
+	if col.base, err = Type(t.params()).Column(col.name, sc); err != nil {
 		return nil, err
 	}
 	switch base := col.base.ScanType(); {
@@ -77,7 +79,7 @@ func (col *Nullable) Rows() int {
 	return col.nulls.Rows()
 }
 
-func (col *Nullable) Row(i int, ptr bool) interface{} {
+func (col *Nullable) Row(i int, ptr bool) any {
 	if col.enable {
 		if col.nulls.Row(i) == 1 {
 			return nil
@@ -86,7 +88,7 @@ func (col *Nullable) Row(i int, ptr bool) interface{} {
 	return col.base.Row(i, true)
 }
 
-func (col *Nullable) ScanRow(dest interface{}, row int) error {
+func (col *Nullable) ScanRow(dest any, row int) error {
 	if col.enable {
 		switch col.nulls.Row(row) {
 		case 1:
@@ -125,7 +127,7 @@ func (col *Nullable) ScanRow(dest interface{}, row int) error {
 	return col.base.ScanRow(dest, row)
 }
 
-func (col *Nullable) Append(v interface{}) ([]uint8, error) {
+func (col *Nullable) Append(v any) ([]uint8, error) {
 	nulls, err := col.base.Append(v)
 	if err != nil {
 		return nil, err
@@ -136,7 +138,7 @@ func (col *Nullable) Append(v interface{}) ([]uint8, error) {
 	return nulls, nil
 }
 
-func (col *Nullable) AppendRow(v interface{}) error {
+func (col *Nullable) AppendRow(v any) error {
 	// Might receive double pointers like **String, because of how Nullable columns are read
 	// Unpack because we can't write double pointers
 	rv := reflect.ValueOf(v)
@@ -181,6 +183,26 @@ func (col *Nullable) Encode(buffer *proto.Buffer) {
 		col.nulls.EncodeColumn(buffer)
 	}
 	col.base.Encode(buffer)
+}
+
+func (col *Nullable) ReadStatePrefix(reader *proto.Reader) error {
+	if serialize, ok := col.base.(CustomSerialization); ok {
+		if err := serialize.ReadStatePrefix(reader); err != nil {
+			return fmt.Errorf("failed to read prefix for Nullable base type %s: %w", col.base.Type(), err)
+		}
+	}
+
+	return nil
+}
+
+func (col *Nullable) WriteStatePrefix(buffer *proto.Buffer) error {
+	if serialize, ok := col.base.(CustomSerialization); ok {
+		if err := serialize.WriteStatePrefix(buffer); err != nil {
+			return fmt.Errorf("failed to write prefix for Nullable base type %s: %w", col.base.Type(), err)
+		}
+	}
+
+	return nil
 }
 
 var _ Interface = (*Nullable)(nil)

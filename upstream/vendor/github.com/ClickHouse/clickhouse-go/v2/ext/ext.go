@@ -27,7 +27,7 @@ import (
 func NewTable(name string, columns ...func(t *Table) error) (*Table, error) {
 	table := &Table{
 		name:  name,
-		block: &proto.Block{},
+		block: proto.NewBlock(),
 	}
 	for _, column := range columns {
 		if err := column(table); err != nil {
@@ -58,7 +58,7 @@ func (tbl *Table) Block() *proto.Block {
 	return tbl.block
 }
 
-func (tbl *Table) Append(v ...interface{}) error {
+func (tbl *Table) Append(v ...any) error {
 	return tbl.block.Append(v...)
 }
 
