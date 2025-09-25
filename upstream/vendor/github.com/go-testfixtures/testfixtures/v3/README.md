@@ -2,11 +2,13 @@
 
 [![PkgGoDev](https://pkg.go.dev/badge/github.com/go-testfixtures/testfixtures/v3?tab=doc)](https://pkg.go.dev/github.com/go-testfixtures/testfixtures/v3?tab=doc)
 
-> ***Warning***: this package will wipe the database data before loading the
+> [!WARNING]
+> This package will wipe the database data before loading the
 fixtures! It is supposed to be used on a test database. Please, double check
 if you are running it against the correct database.
 
-> **TIP**: There are options not described in this README page. It's
+> [!NOTE]
+> There are options not described in this README page. It's
 > recommended that you also check [the documentation][doc].
 
 Writing tests is hard, even more when you have to deal with an SQL database.
@@ -90,11 +92,19 @@ databases.
     post: "..."
 ```
 
-Binary columns can be represented as hexadecimal strings (should start with `0x`):
+Binary columns can be represented as hexadecimal strings (should start with `0x` and will be automatically converted to `[]byte`):
 
 ```yaml
 - id: 1
   binary_column: 0x1234567890abcdef
+```
+
+String values matching date/time formats (e.g., "2025-08-15", "20250815", "15/08/2025") will be automatically converted to `time.Time`. [See supported formats in time.go](https://github.com/go-testfixtures/testfixtures/blob/master/time.go#L8C1-L27C2). Use `RAW=` prefix to prevent conversion:
+
+```yaml
+- id: 1
+  created_at: 2025-08-15        # Will be converted to time.Time
+  updated_at: RAW=20250815      # Will remain as string
 ```
 
 If you need to write raw SQL, probably to call a function, prefix the value
@@ -399,9 +409,6 @@ Tested using the [github.com/lib/pq](https://github.com/lib/pq) and
 
 ### MySQL / MariaDB
 
-Just make sure the connection string have
-[the multistatement parameter](https://github.com/go-sql-driver/mysql#multistatements)
-set to true, and use:
 
 ```go
 testfixtures.New(
@@ -411,6 +418,20 @@ testfixtures.New(
 ```
 
 Tested using the [github.com/go-sql-driver/mysql](https://github.com/go-sql-driver/mysql) driver.
+
+#### Multistatements parameter
+
+You can use [the multistatement parameter](https://github.com/go-sql-driver/mysql#multistatements) in the connection
+string to execute some of the setup statements in one query (instead of one query per statement) for a faster execution.
+
+
+```go
+testfixtures.New(
+        ...
+        testfixtures.Dialect("mysql"), // or "mariadb"
+        testfixtures.AllowMultipleStatementsInOneQuery(),
+)
+```
 
 ### SQLite
 
@@ -465,6 +486,8 @@ testfixtures.New(
         testfixtures.DangerousSkipTestDatabaseCheck(),
 )
 ```
+
+ **Important:** Spanner's interleaved tables require specific insertion order to satisfy parent-child dependencies. For this reason, the `Directory()` and `Paths()` methods are not supported with Spanner as they load files alphabetically, which can violate interleaved table constraints. You must use `Files()` or `FilesMultiTables()` instead, ensuring parent tables are listed before their interleaved child tables in the file order, or that they are listed in the right order in a file that contains records for more than one table as supported by `FilesMultiTables()`.
 
 ## Templating
 
