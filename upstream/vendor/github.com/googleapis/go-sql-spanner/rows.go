@@ -16,22 +16,80 @@ package spannerdriver
 
 import (
 	"database/sql/driver"
+	"errors"
+	"fmt"
 	"io"
 	"sync"
+	"time"
 
+	"cloud.google.com/go/civil"
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/google/uuid"
 	"google.golang.org/api/iterator"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
+type resultSetType int
+
+const (
+	resultSetTypeMetadata resultSetType = iota
+	resultSetTypeResults
+	resultSetTypeStats
+	resultSetTypeNoMoreResults
+)
+
+var _ driver.RowsNextResultSet = &rows{}
+
+func createRows(it rowIterator, opts *ExecOptions) *rows {
+	return &rows{
+		it:                      it,
+		decodeOption:            opts.DecodeOption,
+		decodeToNativeArrays:    opts.DecodeToNativeArrays,
+		returnResultSetMetadata: opts.ReturnResultSetMetadata,
+		returnResultSetStats:    opts.ReturnResultSetStats,
+	}
+}
+
 type rows struct {
-	it rowIterator
+	it    rowIterator
+	close func() error
 
 	colsOnce sync.Once
 	dirtyErr error
 	cols     []string
 
+	decodeOption         DecodeOption
+	decodeToNativeArrays bool
+
 	dirtyRow *spanner.Row
+
+	currentResultSetType    resultSetType
+	returnResultSetMetadata bool
+	returnResultSetStats    bool
+
+	hasReturnedResultSetMetadata bool
+	hasReturnedResultSetStats    bool
+}
+
+// HasNextResultSet implements [driver.RowsNextResultSet.HasNextResultSet].
+func (r *rows) HasNextResultSet() bool {
+	if r.currentResultSetType == resultSetTypeMetadata && r.returnResultSetMetadata {
+		return true
+	}
+	if r.currentResultSetType == resultSetTypeResults && r.returnResultSetStats {
+		return true
+	}
+	return false
+}
+
+// NextResultSet implements [driver.RowsNextResultSet.NextResultSet].
+func (r *rows) NextResultSet() error {
+	if !r.HasNextResultSet() {
+		return io.EOF
+	}
+	r.currentResultSetType++
+	return nil
 }
 
 // Columns returns the names of the columns. The number of
@@ -40,17 +98,37 @@ type rows struct {
 // string should be returned for that entry.
 func (r *rows) Columns() []string {
 	r.getColumns()
-	return r.cols
+	switch r.currentResultSetType {
+	case resultSetTypeMetadata:
+		return []string{"metadata"}
+	case resultSetTypeResults:
+		return r.cols
+	case resultSetTypeStats:
+		return []string{"stats"}
+	case resultSetTypeNoMoreResults:
+		return []string{}
+	}
+	return []string{}
 }
 
 // Close closes the rows iterator.
 func (r *rows) Close() error {
 	r.it.Stop()
+	if r.close != nil {
+		if err := r.close(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (r *rows) getColumns() {
 	r.colsOnce.Do(func() {
+		// Automatically advance the Rows object to the actual query data if we should
+		// not return the ResultSetMetadata as a separate result set.
+		if r.currentResultSetType == resultSetTypeMetadata && !r.returnResultSetMetadata {
+			r.currentResultSetType = resultSetTypeResults
+		}
 		row, err := r.it.Next()
 		if err == nil {
 			r.dirtyRow = row
@@ -60,7 +138,12 @@ func (r *rows) getColumns() {
 				return
 			}
 		}
-		rowType := r.it.Metadata().RowType
+		metadata, err := r.it.Metadata()
+		if err != nil {
+			r.dirtyErr = err
+			return
+		}
+		rowType := metadata.RowType
 		r.cols = make([]string, len(rowType.Fields))
 		for i, c := range rowType.Fields {
 			r.cols[i] = c.Name
@@ -79,17 +162,26 @@ func (r *rows) getColumns() {
 // a buffer held in dest.
 func (r *rows) Next(dest []driver.Value) error {
 	r.getColumns()
+
+	if r.currentResultSetType == resultSetTypeMetadata {
+		return r.nextMetadata(dest)
+	}
+	if r.currentResultSetType == resultSetTypeStats {
+		return r.nextStats(dest)
+	}
+
 	var row *spanner.Row
-	if r.dirtyRow != nil {
-		row = r.dirtyRow
-		r.dirtyRow = nil
-	} else if r.dirtyErr != nil {
+	if r.dirtyErr != nil {
 		err := r.dirtyErr
 		r.dirtyErr = nil
 		if err == iterator.Done {
 			return io.EOF
 		}
 		return err
+	}
+	if r.dirtyRow != nil {
+		row = r.dirtyRow
+		r.dirtyRow = nil
 	} else {
 		var err error
 		row, err = r.it.Next() // returns io.EOF when there is no next
@@ -106,8 +198,12 @@ func (r *rows) Next(dest []driver.Value) error {
 		if err := row.Column(i, &col); err != nil {
 			return err
 		}
+		if r.decodeOption == DecodeOptionProto {
+			dest[i] = col
+			continue
+		}
 		switch col.Type.Code {
-		case sppb.TypeCode_INT64:
+		case sppb.TypeCode_INT64, sppb.TypeCode_ENUM:
 			var v spanner.NullInt64
 			if err := col.Decode(&v); err != nil {
 				return err
@@ -166,7 +262,17 @@ func (r *rows) Next(dest []driver.Value) error {
 			// for JSON in the Go sql package. That means that instead of returning
 			// nil we should return a NullJSON with valid=false.
 			dest[i] = v
-		case sppb.TypeCode_BYTES:
+		case sppb.TypeCode_UUID:
+			var v spanner.NullUUID
+			if err := col.Decode(&v); err != nil {
+				return err
+			}
+			if v.Valid {
+				dest[i] = v.UUID.String()
+			} else {
+				dest[i] = nil
+			}
+		case sppb.TypeCode_BYTES, sppb.TypeCode_PROTO:
 			// The column value is a base64 encoded string.
 			var v []byte
 			if err := col.Decode(&v); err != nil {
@@ -184,14 +290,11 @@ func (r *rows) Next(dest []driver.Value) error {
 				dest[i] = nil
 			}
 		case sppb.TypeCode_DATE:
-			var v spanner.NullDate
-			if err := col.Decode(&v); err != nil {
-				return err
-			}
-			if v.Valid {
-				dest[i] = v.Date
-			} else {
+			_, isNull := col.Value.Kind.(*structpb.Value_NullValue)
+			if isNull {
 				dest[i] = nil
+			} else {
+				dest[i] = col.Value.GetStringValue()
 			}
 		case sppb.TypeCode_TIMESTAMP:
 			var v spanner.NullTime
@@ -205,24 +308,48 @@ func (r *rows) Next(dest []driver.Value) error {
 			}
 		case sppb.TypeCode_ARRAY:
 			switch col.Type.ArrayElementType.Code {
-			case sppb.TypeCode_INT64:
-				var v []spanner.NullInt64
-				if err := col.Decode(&v); err != nil {
-					return err
+			case sppb.TypeCode_INT64, sppb.TypeCode_ENUM:
+				if r.decodeToNativeArrays {
+					var v []int64
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
+				} else {
+					var v []spanner.NullInt64
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
 				}
-				dest[i] = v
 			case sppb.TypeCode_FLOAT32:
-				var v []spanner.NullFloat32
-				if err := col.Decode(&v); err != nil {
-					return err
+				if r.decodeToNativeArrays {
+					var v []float32
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
+				} else {
+					var v []spanner.NullFloat32
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
 				}
-				dest[i] = v
 			case sppb.TypeCode_FLOAT64:
-				var v []spanner.NullFloat64
-				if err := col.Decode(&v); err != nil {
-					return err
+				if r.decodeToNativeArrays {
+					var v []float64
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
+				} else {
+					var v []spanner.NullFloat64
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
 				}
-				dest[i] = v
 			case sppb.TypeCode_NUMERIC:
 				var v []spanner.NullNumeric
 				if err := col.Decode(&v); err != nil {
@@ -230,44 +357,216 @@ func (r *rows) Next(dest []driver.Value) error {
 				}
 				dest[i] = v
 			case sppb.TypeCode_STRING:
-				var v []spanner.NullString
-				if err := col.Decode(&v); err != nil {
-					return err
+				if r.decodeToNativeArrays {
+					var v []string
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
+				} else {
+					var v []spanner.NullString
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
 				}
-				dest[i] = v
 			case sppb.TypeCode_JSON:
 				var v []spanner.NullJSON
 				if err := col.Decode(&v); err != nil {
 					return err
 				}
 				dest[i] = v
-			case sppb.TypeCode_BYTES:
+			case sppb.TypeCode_UUID:
+				if r.decodeToNativeArrays {
+					var v []uuid.UUID
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
+				} else {
+					var v []spanner.NullUUID
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
+				}
+			case sppb.TypeCode_BYTES, sppb.TypeCode_PROTO:
 				var v [][]byte
 				if err := col.Decode(&v); err != nil {
 					return err
 				}
 				dest[i] = v
 			case sppb.TypeCode_BOOL:
-				var v []spanner.NullBool
-				if err := col.Decode(&v); err != nil {
-					return err
+				if r.decodeToNativeArrays {
+					var v []bool
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
+				} else {
+					var v []spanner.NullBool
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
 				}
-				dest[i] = v
 			case sppb.TypeCode_DATE:
-				var v []spanner.NullDate
-				if err := col.Decode(&v); err != nil {
-					return err
+				if r.decodeToNativeArrays {
+					var v []civil.Date
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
+				} else {
+					var v []spanner.NullDate
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
 				}
-				dest[i] = v
 			case sppb.TypeCode_TIMESTAMP:
-				var v []spanner.NullTime
-				if err := col.Decode(&v); err != nil {
-					return err
+				if r.decodeToNativeArrays {
+					var v []time.Time
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
+				} else {
+					var v []spanner.NullTime
+					if err := col.Decode(&v); err != nil {
+						return err
+					}
+					dest[i] = v
 				}
-				dest[i] = v
+			default:
+				return fmt.Errorf("unsupported array element type ARRAY<%v>, "+
+					"use spannerdriver.ExecOptions{DecodeOption: spannerdriver.DecodeOptionProto} "+
+					"to return the underlying protobuf value", col.Type.ArrayElementType.Code)
 			}
+		default:
+			return fmt.Errorf("unsupported type %v, "+
+				"use spannerdriver.ExecOptions{DecodeOption: spannerdriver.DecodeOptionProto} "+
+				"to return the underlying protobuf value", col.Type.Code)
 		}
-		// TODO: Implement struct
 	}
+	return nil
+}
+
+func (r *rows) nextMetadata(dest []driver.Value) error {
+	if r.dirtyErr != nil && !errors.Is(r.dirtyErr, iterator.Done) {
+		return r.dirtyErr
+	}
+	if r.hasReturnedResultSetMetadata {
+		return io.EOF
+	}
+	r.hasReturnedResultSetMetadata = true
+	metadata, err := r.it.Metadata()
+	if err != nil {
+		return err
+	}
+	dest[0] = metadata
+	return nil
+}
+
+func (r *rows) nextStats(dest []driver.Value) error {
+	if r.hasReturnedResultSetStats {
+		return io.EOF
+	}
+	r.hasReturnedResultSetStats = true
+	dest[0] = r.it.ResultSetStats()
+	return nil
+}
+
+var _ driver.Rows = (*emptyRows)(nil)
+var _ driver.RowsNextResultSet = (*emptyRows)(nil)
+var emptyRowsMetadata = &sppb.ResultSetMetadata{
+	RowType: &sppb.StructType{
+		Fields: []*sppb.StructType_Field{{Name: "affected_rows", Type: &sppb.Type{Code: sppb.TypeCode_INT64}}},
+	},
+}
+var emptyRowsStats = &sppb.ResultSetStats{}
+
+type emptyRows struct {
+	currentResultSetType    resultSetType
+	returnResultSetMetadata bool
+	returnResultSetStats    bool
+
+	hasReturnedResultSetMetadata bool
+	hasReturnedResultSetStats    bool
+}
+
+func createDriverResultRows(_ driver.Result, opts *ExecOptions) *emptyRows {
+	res := &emptyRows{
+		returnResultSetMetadata: opts.ReturnResultSetMetadata,
+		returnResultSetStats:    opts.ReturnResultSetStats,
+	}
+	if !opts.ReturnResultSetMetadata {
+		res.currentResultSetType = resultSetTypeResults
+	}
+	return res
+}
+
+func (e *emptyRows) HasNextResultSet() bool {
+	if e.currentResultSetType == resultSetTypeMetadata && e.returnResultSetMetadata {
+		return true
+	}
+	if e.currentResultSetType == resultSetTypeResults && e.returnResultSetStats {
+		return true
+	}
+	return false
+}
+
+func (e *emptyRows) NextResultSet() error {
+	if !e.HasNextResultSet() {
+		return io.EOF
+	}
+	e.currentResultSetType++
+	return nil
+}
+
+func (e *emptyRows) Columns() []string {
+	switch e.currentResultSetType {
+	case resultSetTypeMetadata:
+		return []string{"metadata"}
+	case resultSetTypeResults:
+		return []string{"affected_rows"}
+	case resultSetTypeStats:
+		return []string{"stats"}
+	case resultSetTypeNoMoreResults:
+		return []string{}
+	}
+	return []string{}
+}
+
+func (e *emptyRows) Close() error {
+	return nil
+}
+
+func (e *emptyRows) Next(dest []driver.Value) error {
+	if e.currentResultSetType == resultSetTypeMetadata {
+		return e.nextMetadata(dest)
+	}
+	if e.currentResultSetType == resultSetTypeStats {
+		return e.nextStats(dest)
+	}
+
+	return io.EOF
+}
+
+func (e *emptyRows) nextMetadata(dest []driver.Value) error {
+	if e.hasReturnedResultSetMetadata {
+		return io.EOF
+	}
+	e.hasReturnedResultSetMetadata = true
+	dest[0] = emptyRowsMetadata
+	return nil
+}
+
+func (e *emptyRows) nextStats(dest []driver.Value) error {
+	if e.hasReturnedResultSetStats {
+		return io.EOF
+	}
+	e.hasReturnedResultSetStats = true
+	dest[0] = emptyRowsStats
 	return nil
 }

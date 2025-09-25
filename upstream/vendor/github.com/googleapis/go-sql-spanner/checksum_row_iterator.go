@@ -23,6 +23,7 @@ import (
 
 	"cloud.google.com/go/spanner"
 	sppb "cloud.google.com/go/spanner/apiv1/spannerpb"
+	"github.com/googleapis/go-sql-spanner/parser"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -41,6 +42,8 @@ func init() {
 	gob.Register(structpb.Value_StructValue{})
 }
 
+var _ rowIterator = &checksumRowIterator{}
+
 // checksumRowIterator implements rowIterator and keeps track of a running
 // checksum for all results that have been seen during the iteration of the
 // results. This checksum can be used to verify whether a retry returned the
@@ -49,9 +52,11 @@ type checksumRowIterator struct {
 	*spanner.RowIterator
 	metadata *sppb.ResultSetMetadata
 
-	ctx  context.Context
-	tx   *readWriteTransaction
-	stmt spanner.Statement
+	ctx      context.Context
+	tx       *readWriteTransaction
+	stmt     spanner.Statement
+	stmtType parser.StatementType
+	options  spanner.QueryOptions
 	// nc (nextCount) indicates the number of times that next has been called
 	// on the iterator. Next() will be called the same number of times during
 	// a retry.
@@ -72,6 +77,10 @@ type checksumRowIterator struct {
 	// where the error occurred.
 	errIndex int64
 	err      error
+}
+
+func (it *checksumRowIterator) String() string {
+	return it.stmt.SQL
 }
 
 func (it *checksumRowIterator) Next() (row *spanner.Row, err error) {
@@ -160,7 +169,7 @@ func createMetadataChecksum(enc *gob.Encoder, buffer *bytes.Buffer, metadata *sp
 func (it *checksumRowIterator) retry(ctx context.Context, tx *spanner.ReadWriteStmtBasedTransaction) error {
 	buffer := &bytes.Buffer{}
 	enc := gob.NewEncoder(buffer)
-	retryIt := tx.Query(ctx, it.stmt)
+	retryIt := tx.QueryWithOptions(ctx, it.stmt, it.options)
 	// If the original iterator had been stopped, we should also always stop the
 	// new iterator.
 	if it.stopped {
@@ -241,6 +250,10 @@ func (it *checksumRowIterator) Stop() {
 	}
 }
 
-func (it *checksumRowIterator) Metadata() *sppb.ResultSetMetadata {
-	return it.metadata
+func (it *checksumRowIterator) Metadata() (*sppb.ResultSetMetadata, error) {
+	return it.metadata, nil
+}
+
+func (it *checksumRowIterator) ResultSetStats() *sppb.ResultSetStats {
+	return createResultSetStats(it.RowIterator, it.stmtType)
 }
