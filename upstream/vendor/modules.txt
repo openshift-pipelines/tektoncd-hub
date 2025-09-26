@@ -123,8 +123,8 @@ github.com/felixge/httpsnoop
 # github.com/fsnotify/fsnotify v1.7.0
 ## explicit; go 1.17
 github.com/fsnotify/fsnotify
-# github.com/go-chi/chi/v5 v5.0.11
-## explicit; go 1.14
+# github.com/go-chi/chi/v5 v5.2.2
+## explicit; go 1.20
 github.com/go-chi/chi/v5
 # github.com/go-co-op/gocron v1.37.0
 ## explicit; go 1.16
@@ -385,8 +385,8 @@ github.com/mailru/easyjson/jwriter
 # github.com/manveru/faker v0.0.0-20171103152722-9fbc68a78c4d
 ## explicit
 github.com/manveru/faker
-# github.com/markbates/goth v1.78.0
-## explicit; go 1.15
+# github.com/markbates/goth v1.82.0
+## explicit; go 1.23.0
 github.com/markbates/goth
 github.com/markbates/goth/gothic
 github.com/markbates/goth/providers/bitbucket
@@ -546,8 +546,8 @@ github.com/spf13/viper/internal/features
 # github.com/stoewer/go-strcase v1.2.0
 ## explicit; go 1.11
 github.com/stoewer/go-strcase
-# github.com/stretchr/testify v1.8.4
-## explicit; go 1.20
+# github.com/stretchr/testify v1.9.0
+## explicit; go 1.17
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
 # github.com/subosito/gotenv v1.6.0
