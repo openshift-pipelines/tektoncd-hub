@@ -2,10 +2,12 @@ package httpcheck
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
+	"github.com/itchyny/gojq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +25,7 @@ func (tt *Tester) WithBody(body []byte) *Tester {
 func (tt *Tester) HasBody(expected []byte) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -36,7 +38,7 @@ func (tt *Tester) HasBody(expected []byte) *Tester {
 func (tt *Tester) MustHasBody(expected []byte) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -49,7 +51,7 @@ func (tt *Tester) MustHasBody(expected []byte) *Tester {
 func (tt *Tester) ContainsBody(segment []byte) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -64,7 +66,7 @@ func (tt *Tester) ContainsBody(segment []byte) *Tester {
 func (tt *Tester) MustContainsBody(segment []byte) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -79,7 +81,7 @@ func (tt *Tester) MustContainsBody(segment []byte) *Tester {
 func (tt *Tester) NotContainsBody(segment []byte) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -94,7 +96,7 @@ func (tt *Tester) NotContainsBody(segment []byte) *Tester {
 func (tt *Tester) MustNotContainsBody(segment []byte) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -116,7 +118,7 @@ func (tt *Tester) WithString(body string) *Tester {
 func (tt *Tester) HasString(expected string) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -129,7 +131,7 @@ func (tt *Tester) HasString(expected string) *Tester {
 func (tt *Tester) MustHasString(expected string) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -142,7 +144,7 @@ func (tt *Tester) MustHasString(expected string) *Tester {
 func (tt *Tester) ContainsString(substr string) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -155,7 +157,7 @@ func (tt *Tester) ContainsString(substr string) *Tester {
 func (tt *Tester) MustContainsString(substr string) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -169,7 +171,7 @@ func (tt *Tester) MustContainsString(substr string) *Tester {
 func (tt *Tester) NotContainsString(substr string) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
@@ -183,11 +185,69 @@ func (tt *Tester) NotContainsString(substr string) *Tester {
 func (tt *Tester) MustNotContainsString(substr string) *Tester {
 	body, err := io.ReadAll(tt.response.Body)
 	require.NoError(tt.t, err)
-	tt.response.Body.Close()
+	_ = tt.response.Body.Close()
 	defer func(body []byte) {
 		tt.response.Body = io.NopCloser(bytes.NewReader(body))
 	}(body)
 
 	require.NotContains(tt.t, string(body), substr)
+	return tt
+}
+
+func (tt *Tester) MatchesJSONQuery(q string) *Tester {
+	body, err := io.ReadAll(tt.response.Body)
+	require.NoError(tt.t, err)
+	_ = tt.response.Body.Close()
+	defer func(body []byte) {
+		tt.response.Body = io.NopCloser(bytes.NewReader(body))
+	}(body)
+	var in any
+	require.NoError(tt.t, json.Unmarshal(body, &in), "failed to unmarshal json: %s", string(body))
+	jq, err := gojq.Parse(q)
+	require.NoError(tt.t, err, "failed to parse query %q: %s", q)
+	it := jq.Run(in)
+	var detect bool
+	for {
+		v, ok := it.Next()
+		if !ok {
+			break
+		}
+		if err, ok := v.(error); ok {
+			require.NoError(tt.t, err, "query %q does not match: %s", q, string(body))
+		}
+		if v != nil {
+			detect = true
+		}
+	}
+	assert.True(tt.t, detect, "query %q does not match: %s", q, string(body))
+	return tt
+}
+
+func (tt *Tester) NotMatchesJSONQuery(q string) *Tester {
+	body, err := io.ReadAll(tt.response.Body)
+	require.NoError(tt.t, err)
+	_ = tt.response.Body.Close()
+	defer func(body []byte) {
+		tt.response.Body = io.NopCloser(bytes.NewReader(body))
+	}(body)
+	var in any
+	require.NoError(tt.t, json.Unmarshal(body, &in))
+	jq, err := gojq.Parse(q)
+	require.NoError(tt.t, err, "failed to parse query %q: %s", q)
+	it := jq.Run(in)
+	var detect bool
+	for {
+		v, ok := it.Next()
+		if !ok {
+			break
+		}
+		if err, ok := v.(error); ok {
+			require.NoError(tt.t, err, "query %q does not match: %s", q, string(body))
+		}
+		if v != nil {
+			detect = true
+		}
+	}
+	assert.False(tt.t, detect, "query %q does not match: %s", q, string(body))
 	return tt
 }
