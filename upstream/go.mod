@@ -19,7 +19,7 @@ require (
 	github.com/hako/durafmt v0.0.0-20210608085754-5c1018a4e16b
 	github.com/ikawaha/goahttpcheck v1.15.9
 	github.com/joho/godotenv v1.5.1
-	github.com/markbates/goth v1.80.0
+	github.com/markbates/goth v1.82.0
 	github.com/mitchellh/go-homedir v1.1.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
@@ -77,7 +77,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/go-chi/chi/v5 v5.1.0 // indirect
+	github.com/go-chi/chi/v5 v5.2.2 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.5 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
