@@ -1,5 +1,62 @@
 # Changelog
 
+## v3.18.0 - 2025-08-24
+- feat: use go.work to reduce core library dependencies([#257](https://github.com/go-testfixtures/testfixtures/pull/257) by @slsyy)
+- docs: add automatic string conversion documentation ([#318](https://github.com/go-testfixtures/testfixtures/pull/318) by @alingse)
+
+## v3.17.0 - 2025-07-14
+- feat: make placeholder configurable regardless of dialect ([#305](https://github.com/go-testfixtures/testfixtures/pull/305) by @levopmik and @peakle)
+- feat: support spanner json columns ([#309](https://github.com/go-testfixtures/testfixtures/pull/309) by @nu0ma)
+- Updated dependencies.
+
+## v3.16.0 - 2025-05-25
+- feat: migrate from gopkg.in/yaml.v3 to github.com/goccy/go-yaml ([#290](https://github.com/go-testfixtures/testfixtures/pull/290) by @tomnewton)
+- feat: add support for interleaved tables in spanner ([#290](https://github.com/go-testfixtures/testfixtures/pull/290) by @tomnewton)
+- perf: identify identity columns once during init for postgres (#289) ([#289](https://github.com/go-testfixtures/testfixtures/pull/289) by @kolaente)
+- feat: adds support for foreign keys constraints for composite primary keys in spanner ([#287](https://github.com/go-testfixtures/testfixtures/pull/287) by @tomnewton)
+
+## v3.15.0 - 2025-05-11
+
+- feat: support quoted columns in postgresql ([#286](https://github.com/go-testfixtures/testfixtures/pull/286) by @HTechHQ)
+- test: move all db tests to dbtest package ([#251](https://github.com/go-testfixtures/testfixtures/pull/251) by @slsyy)
+- chore: remove spanner underscore import ([#250](https://github.com/go-testfixtures/testfixtures/pull/250) by @slsyy)
+- Upgraded to Go v1.23 ([#281](https://github.com/go-testfixtures/testfixtures/pull/281) by @slsyy)
+- Updated golangci-lint and CI ([#281](https://github.com/go-testfixtures/testfixtures/pull/281) by @slsyy)
+- Updated dependencies.
+
+## v3.14.0 - 2024-12-22
+
+- feat(mysql): make multistatements parameter optional ([#249](https://github.com/go-testfixtures/testfixtures/pull/249) by @slsyy)
+- test: remove private api usage in assertFixturesLoaded ([#239](https://github.com/go-testfixtures/testfixtures/pull/239) by @slsyy)
+- Updated dependencies.
+
+## v3.13.0 - 2024-10-25
+
+- Add GCP Spanner support ([#211](https://github.com/go-testfixtures/testfixtures/pull/211) by @kikihakiem)
+- Remove ClickHouse underscore import by ([#220](https://github.com/go-testfixtures/testfixtures/pull/220) by @slsyy)
+- test: remove private api usages in tests ([#221](https://github.com/go-testfixtures/testfixtures/pull/221) by @slsyy)
+- CI: use `docker compose` instead of `docker-compose` ([#214](https://github.com/go-testfixtures/testfixtures/pull/214) by @slsyy)
+- Updated dependencies.
+
+## v3.12.0 - 2024-07-13
+
+- Reset sequences in a single exec to improve performance
+  ([#208](https://github.com/go-testfixtures/testfixtures/pull/208) by @slsyy)
+- Skip checksum calculation when not needed to improve performance
+  ([#207](https://github.com/go-testfixtures/testfixtures/pull/207) by @slsyy).
+- Add `SkipTableChecksumComputation` option
+  ([#203](https://github.com/go-testfixtures/testfixtures/issues/203), [#206](https://github.com/go-testfixtures/testfixtures/pull/206) by @slsyy)
+- PostgreSQL: Run some queries concurrently to improve performance
+  ([#205](https://github.com/go-testfixtures/testfixtures/pull/205) by @slsyy).
+- Optimize Docker image a bit
+  ([#204](https://github.com/go-testfixtures/testfixtures/pull/204) by @slsyy).
+
+## v3.11.0 - 2024-05-25
+
+- Add `OVERRIDING SYSTEM VALUE` for `INSERT` statements on PostgreSQL
+  ([#183](https://github.com/go-testfixtures/testfixtures/pull/183) by @amakmurr).
+- Upgraded dependencies.
+
 ## v3.10.0 - 2024-02-17
 
 - Fix usage with Microsoft SQL Server when the database is configured with a

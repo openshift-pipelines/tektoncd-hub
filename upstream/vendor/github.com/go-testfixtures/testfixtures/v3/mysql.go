@@ -3,13 +3,17 @@ package testfixtures
 import (
 	"database/sql"
 	"fmt"
+	"strings"
+
+	"github.com/go-testfixtures/testfixtures/v3/shared"
 )
 
 type mySQL struct {
 	baseHelper
 
-	skipResetSequences bool
-	resetSequencesTo   int64
+	skipResetSequences                bool
+	resetSequencesTo                  int64
+	allowMultipleStatementsInOneQuery bool
 
 	tables         []string
 	tablesChecksum map[string]int64
@@ -25,21 +29,21 @@ func (h *mySQL) init(db *sql.DB) error {
 	return nil
 }
 
-func (*mySQL) paramType() int {
-	return paramTypeQuestion
+func (*mySQL) paramType() ParamType {
+	return ParamTypeQuestion
 }
 
 func (*mySQL) quoteKeyword(str string) string {
 	return fmt.Sprintf("`%s`", str)
 }
 
-func (*mySQL) databaseName(q queryable) (string, error) {
+func (*mySQL) databaseName(q shared.Queryable) (string, error) {
 	var dbName string
 	err := q.QueryRow("SELECT DATABASE()").Scan(&dbName)
 	return dbName, err
 }
 
-func (h *mySQL) tableNames(q queryable) ([]string, error) {
+func (h *mySQL) tableNames(q shared.Queryable) ([]string, error) {
 	const query = `
 		SELECT table_name
 		FROM information_schema.tables
@@ -55,7 +59,9 @@ func (h *mySQL) tableNames(q queryable) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var tables []string
 	for rows.Next() {
@@ -103,31 +109,59 @@ func (h *mySQL) disableReferentialIntegrity(db *sql.DB, loadFn loadFunction) (er
 }
 
 func (h *mySQL) resetSequences(db *sql.DB) error {
+	if len(h.tables) == 0 {
+		return nil
+	}
+
 	resetSequencesTo := h.resetSequencesTo
 	if resetSequencesTo == 0 {
 		resetSequencesTo = 10000
 	}
 
+	if h.allowMultipleStatementsInOneQuery {
+		return h.resetSequencesInOneQuery(db, resetSequencesTo)
+	}
+	return h.resetSequencesInMultipleQueries(db, resetSequencesTo)
+
+}
+
+func (h *mySQL) resetSequencesInOneQuery(db *sql.DB, resetSequencesTo int64) error {
+	b := strings.Builder{}
 	for _, t := range h.tables {
-		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s AUTO_INCREMENT = %d", h.quoteKeyword(t), resetSequencesTo)); err != nil {
+		b.WriteString(h.makeResetSequenceQuery(t, resetSequencesTo))
+	}
+	_, err := db.Exec(b.String())
+	return err
+}
+
+func (h *mySQL) resetSequencesInMultipleQueries(db *sql.DB, resetSequencesTo int64) error {
+	for _, t := range h.tables {
+		_, err := db.Exec(h.makeResetSequenceQuery(t, resetSequencesTo))
+		if err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (h *mySQL) isTableModified(q queryable, tableName string) (bool, error) {
+func (h *mySQL) makeResetSequenceQuery(tableName string, resetSequencesTo int64) string {
+	return fmt.Sprintf("ALTER TABLE %s AUTO_INCREMENT = %d;", h.quoteKeyword(tableName), resetSequencesTo)
+}
+
+func (h *mySQL) isTableModified(q shared.Queryable, tableName string) (bool, error) {
+	oldChecksum, found := h.tablesChecksum[tableName]
+	if !found {
+		return true, nil
+	}
+
 	checksum, err := h.getChecksum(q, tableName)
 	if err != nil {
 		return true, err
 	}
-
-	oldChecksum := h.tablesChecksum[tableName]
-
-	return oldChecksum == 0 || checksum != oldChecksum, nil
+	return checksum != oldChecksum, nil
 }
 
-func (h *mySQL) afterLoad(q queryable) error {
+func (h *mySQL) computeTablesChecksum(q shared.Queryable) error {
 	if h.tablesChecksum != nil {
 		return nil
 	}
@@ -143,7 +177,7 @@ func (h *mySQL) afterLoad(q queryable) error {
 	return nil
 }
 
-func (h *mySQL) getChecksum(q queryable, tableName string) (int64, error) {
+func (h *mySQL) getChecksum(q shared.Queryable, tableName string) (int64, error) {
 	query := fmt.Sprintf("CHECKSUM TABLE %s", h.quoteKeyword(tableName))
 	var (
 		table    string
