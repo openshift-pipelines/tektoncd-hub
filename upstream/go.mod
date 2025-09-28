@@ -12,7 +12,7 @@ require (
 	github.com/go-co-op/gocron v1.37.0
 	github.com/go-gormigrate/gormigrate/v2 v2.1.4
 	github.com/go-testfixtures/testfixtures/v3 v3.16.0
-	github.com/golang-jwt/jwt/v4 v4.5.2
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/sessions v1.3.0
