@@ -176,7 +176,7 @@ require (
 	gopkg.in/go-jose/go-jose.v2 v2.6.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.27.1 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
