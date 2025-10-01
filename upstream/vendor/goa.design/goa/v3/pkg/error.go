@@ -59,6 +59,10 @@ const (
 	// UnsupportedMediaType is the error name returned by the Goa decoder
 	// when the content type of the HTTP request body is not supported.
 	UnsupportedMediaType = "unsupported_media_type"
+	// DecodePayload is the error name for decode payload errors.
+	DecodePayload = "decode_payload"
+	// MissingPayload is the error name for missing payload errors.
+	MissingPayload = "missing_payload"
 )
 
 // NewServiceError creates an error.
@@ -110,13 +114,13 @@ func TemporaryTimeoutError(name, format string, v ...any) *ServiceError {
 // MissingPayloadError is the error produced by the generated code when a
 // request is missing a required payload.
 func MissingPayloadError() error {
-	return PermanentError("missing_payload", "missing required payload")
+	return PermanentError(MissingPayload, "missing required payload")
 }
 
 // DecodePayloadError is the error produced by the generated code when a request
 // body cannot be decoded successfully.
 func DecodePayloadError(msg string) error {
-	return PermanentError("decode_payload", msg)
+	return PermanentError(DecodePayload, "%s", msg)
 }
 
 // UnsupportedMediaTypeError is the error produced by the Goa decoder when the
@@ -162,7 +166,7 @@ func InvalidFormatError(name, target string, format Format, formatError error) e
 // InvalidPatternError is the error produced by the generated code when the
 // value of a payload field does not match the pattern validation defined in the
 // design.
-func InvalidPatternError(name, target string, pattern string) error {
+func InvalidPatternError(name, target, pattern string) error {
 	return withField(name, PermanentError(
 		InvalidPattern, "%s must match the regexp %q but got value %q", name, pattern, target))
 }
@@ -170,7 +174,7 @@ func InvalidPatternError(name, target string, pattern string) error {
 // InvalidRangeError is the error produced by the generated code when the value
 // of a payload field does not match the range validation defined in the design.
 // value may be an int or a float64.
-func InvalidRangeError(name string, target any, value any, min bool) error {
+func InvalidRangeError(name string, target, value any, min bool) error {
 	comp := "greater or equal"
 	if !min {
 		comp = "lesser or equal"
