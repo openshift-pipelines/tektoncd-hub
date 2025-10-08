@@ -254,7 +254,7 @@ github.com/go-openapi/swag
 # github.com/go-testfixtures/testfixtures/v3 v3.14.0
 ## explicit; go 1.21
 github.com/go-testfixtures/testfixtures/v3
-# github.com/go-viper/mapstructure/v2 v2.2.1
+# github.com/go-viper/mapstructure/v2 v2.4.0
 ## explicit; go 1.18
 github.com/go-viper/mapstructure/v2
 github.com/go-viper/mapstructure/v2/internal/errors
