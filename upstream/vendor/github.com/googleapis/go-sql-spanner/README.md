@@ -5,7 +5,9 @@
 [Google Cloud Spanner](https://cloud.google.com/spanner) driver for
 Go's [database/sql](https://golang.org/pkg/database/sql/) package.
 
-``` go
+This driver can be used with both Spanner GoogleSQL and Spanner PostgreSQL databases.
+
+```go
 import _ "github.com/googleapis/go-sql-spanner"
 
 db, err := sql.Open("spanner", "projects/PROJECT/instances/INSTANCE/databases/DATABASE")
@@ -13,8 +15,8 @@ if err != nil {
     log.Fatal(err)
 }
 
-// Print tweets with more than 500 likes.
-rows, err := db.QueryContext(ctx, "SELECT id, text FROM tweets WHERE likes > @likes", sql.Named("likes", 500))
+// Print singers with more than 500 likes.
+rows, err := db.QueryContext(ctx, "SELECT id, name FROM singers WHERE likes > ?", 500)
 if err != nil {
     log.Fatal(err)
 }
@@ -55,6 +57,17 @@ db.ExecContext(ctx, "INSERT INTO tweets (id, text, rts) VALUES (@id, @text, @rts
 	sql.Named("id", id), sql.Named("text", text), sql.Named("rts", 10000))
 ```
 
+### Using PostgreSQL-style positional arguments
+
+When connected to a PostgreSQL-dialect Spanner database, you can also use PostgreSQL-style
+query parameters `$1, $2, ..., $n`. These query parameters are handled as positional parameters.
+
+```go
+db.QueryContext(ctx, "SELECT id, text FROM tweets WHERE likes > $1", 500)
+
+db.ExecContext(ctx, "INSERT INTO tweets (id, text, rts) VALUES ($1, $2, $3)", id, text, 10000)
+```
+
 ### Using named parameters with positional arguments (not recommended)
 Named parameters can also be used in combination with positional arguments,
 but this is __not recommended__, as the behavior can be hard to predict if
@@ -65,15 +78,44 @@ the same named query parameter is used in multiple places in the statement.
 db.ExecContext(ctx, "DELETE FROM tweets WHERE id = @id", 14544498215374)
 ```
 
+### Query Options
+Query options can be passed in as arguments to a query. Pass in a value of
+type `spannerdriver.ExecOptions` to supply additional execution options for
+a statement. The `spanner.QueryOptions` will be passed through to the Spanner
+client as the query options to use for the query or DML statement.
+
+```go
+tx.ExecContext(ctx, "INSERT INTO Singers (SingerId, Name) VALUES (@id, @name)",
+	spannerdriver.ExecOptions{QueryOptions: spanner.QueryOptions{RequestTag: "insert_singer"}},
+    123, "Bruce Allison")
+tx.QueryContext(ctx, "SELECT SingerId, Name FROM Singers WHERE SingerId = ?",
+    spannerdriver.ExecOptions{QueryOptions: spanner.QueryOptions{RequestTag: "select_singer"}},
+    123)
+```
+
+Statement tags (request tags) can also be set using the custom SQL statement
+`set statement_tag='my_tag'`:
+
+```go
+tx.ExecContext(ctx, "set statement_tag = 'select_singer'")
+tx.QueryContext(ctx, "SELECT SingerId, Name FROM Singers WHERE SingerId = ?", 123)
+```
+
 ## Transactions
 
-- Read-write transactions always uses the strongest isolation level and ignore the user-specified level.
+- Read-write transactions support isolation levels `Serializable`, `Snapshot` and `RepeatableRead`.
 - Read-only transactions do strong-reads by default. Read-only transactions must be ended by calling
   either Commit or Rollback. Calling either of these methods will end the current read-only
-  transaction and return the session that is used to the session pool.
+  transaction.
 
-``` go
+```go
 tx, err := db.BeginTx(ctx, &sql.TxOptions{}) // Read-write transaction.
+
+// Read-write transaction with a transaction tag.
+conn, _ := db.Conn(ctx)
+_, _ := conn.ExecContext(ctx, "SET TRANSACTION_TAG='my_transaction_tag'")
+tx, err := conn.BeginTx(ctx, &sql.TxOptions{})
+
 
 tx, err := db.BeginTx(ctx, &sql.TxOptions{
     ReadOnly: true, // Read-only transaction using strong reads.
@@ -85,6 +127,38 @@ tx, err := conn.BeginTx(ctx, &sql.TxOptions{
     ReadOnly: true, // Read-only transaction using a 10 second exact staleness.
 })
 ```
+
+## Transaction Runner (Retry Transactions)
+
+Spanner can abort a read/write transaction if concurrent modifications are detected
+that would violate the transaction consistency. When this happens, the driver will
+return the `ErrAbortedDueToConcurrentModification` error. You can use the
+`RunTransaction` and `RunTransactionWithOptions` functions to let the driver
+automatically retry transactions that are aborted by Spanner.
+
+```go
+package sample
+
+import (
+  "context"
+  "database/sql"
+  "fmt"
+
+  _ "github.com/googleapis/go-sql-spanner"
+  spannerdriver "github.com/googleapis/go-sql-spanner"
+)
+
+spannerdriver.RunTransactionWithOptions(ctx, db, &sql.TxOptions{}, func(ctx context.Context, tx *sql.Tx) error {
+    row := tx.QueryRowContext(ctx, "select Name from Singers where SingerId=@id", 123)
+    var name string
+    if err := row.Scan(&name); err != nil {
+        return err
+    }
+    return nil
+}, spanner.TransactionOptions{TransactionTag: "my_transaction_tag"})
+```
+
+See also the [transaction runner sample](./examples/run-transaction/main.go).
 
 ## DDL Statements
 
@@ -152,12 +226,26 @@ $ gcloud beta emulators spanner start
 $ export SPANNER_EMULATOR_HOST=localhost:9010
 ```
 
+### Automatically Create Instance and Database on the Emulator
+You can also add the `autoConfigEmulator=true` option to the connection string. This will instruct the driver
+to connect to the Spanner emulator, and to automatically create the Spanner instance and database on the
+emulator. See [examples/emulator](examples/emulator) for a working example.
+
 ## Spanner PostgreSQL Interface
 
-This driver only works with the Spanner GoogleSQL dialect. For the
-Spanner PostgreSQL dialect, any PostgreSQL driver that implements the
-[database/sql](https://golang.org/pkg/database/sql/) interface can be used
-in combination with
+This driver works with both Spanner GoogleSQL and PostgreSQL dialects.
+The driver automatically detects the dialect of the database that it is connected to.
+
+Note that the types of query parameters that are supported depends on the dialect of the
+database that the driver is connected to:
+1. Positional parameters (`?`): Supported for both dialects.
+2. Named parameters (`@id`, `@name`, ...): Supported for both dialects.
+3. PostgreSQL-style positional parameters (`$1`, `$2`, ...): Only supported for PostgreSQL databases.
+
+### Alternatives
+
+You can also use Spanner PostgreSQL dialect databases with any off-the-shelf PostgreSQL driver that
+implements the [database/sql](https://golang.org/pkg/database/sql/) interface in combination with
 [PGAdapter](https://cloud.google.com/spanner/docs/pgadapter).
 
 For example, the [pgx](https://github.com/jackc/pgx) driver can be used in combination with
@@ -172,14 +260,10 @@ initial attempt and the retry attempt, the Aborted error will be propagated
 to the client application as an `spannerdriver.ErrAbortedDueToConcurrentModification`
 error.
 
-## [Go Versions Supported](#supported-versions)
+## Go Versions Supported
 
-Our libraries are compatible with at least the three most recent, major Go
-releases. They are currently compatible with:
-
-- Go 1.23
-- Go 1.22
-- Go 1.21
+The Spanner database/sql driver follows the [Go release policy](https://go.dev/doc/devel/release)
+and supports the two latest major Go versions.
 
 ## Authorization
 
