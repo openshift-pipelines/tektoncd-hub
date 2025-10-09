@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-// Precision of DateTime64.
+// Precision of DateTime64 and Time64.
 //
 // Tick size (precision): 10^(-precision) seconds.
 // Valid range: [0:9].
@@ -57,9 +57,6 @@ func ToDateTime64(t time.Time, p Precision) DateTime64 {
 
 // Time returns DateTime64 as time.Time.
 func (d DateTime64) Time(p Precision) time.Time {
-	if d == 0 {
-		return time.Time{}
-	}
 	nsec := int64(d) * p.Scale()
 	return time.Unix(nsec/1e9, nsec%1e9)
 }
