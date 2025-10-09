@@ -21,9 +21,11 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding"
+	"encoding/json"
 	"fmt"
-	"github.com/ClickHouse/ch-go/proto"
 	"reflect"
+
+	"github.com/ClickHouse/ch-go/proto"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/binary"
 )
@@ -71,6 +73,16 @@ func (col *String) ScanRow(dest any, row int) error {
 		**d = val
 	case *sql.NullString:
 		return d.Scan(val)
+	case *[]byte:
+		*d = binary.Str2Bytes(val, len(val))
+	case **[]byte:
+		*d = new([]byte)
+		**d = binary.Str2Bytes(val, len(val))
+	case *json.RawMessage:
+		*d = binary.Str2Bytes(val, len(val))
+	case **json.RawMessage:
+		*d = new(json.RawMessage)
+		**d = binary.Str2Bytes(val, len(val))
 	case encoding.BinaryUnmarshaler:
 		return d.UnmarshalBinary(binary.Str2Bytes(val, len(val)))
 	default:
@@ -111,8 +123,14 @@ func (col *String) AppendRow(v any) error {
 		default:
 			col.col.Append("")
 		}
+	case json.RawMessage:
+		col.col.AppendBytes(v)
+	case *json.RawMessage:
+		col.col.AppendBytes(*v)
 	case []byte:
 		col.col.AppendBytes(v)
+	case *[]byte:
+		col.col.AppendBytes(*v)
 	case nil:
 		col.col.Append("")
 	default:
@@ -170,6 +188,26 @@ func (col *String) Append(v any) (nulls []uint8, err error) {
 				nulls[i] = 1
 			}
 			col.AppendRow(v[i])
+		}
+	case []json.RawMessage:
+		nulls = make([]uint8, len(v))
+		for i := range v {
+			col.col.Append(string(v[i]))
+		}
+	case []*json.RawMessage:
+		nulls = make([]uint8, len(v))
+		for i := range v {
+			col.col.Append(string(*v[i]))
+		}
+	case []byte:
+		nulls = make([]uint8, len(v))
+		for i := range v {
+			col.col.Append(string(v[i]))
+		}
+	case []*byte:
+		nulls = make([]uint8, len(v))
+		for i := range v {
+			col.col.Append(string(*v[i]))
 		}
 	case [][]byte:
 		nulls = make([]uint8, len(v))

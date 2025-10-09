@@ -20,18 +20,22 @@ package proto
 import (
 	"errors"
 	"fmt"
-	"sort"
-	"time"
-
 	"github.com/ClickHouse/ch-go/proto"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/column"
+	"sort"
 )
 
 type Block struct {
-	names    []string
-	Packet   byte
-	Columns  []column.Interface
-	Timezone *time.Location
+	names         []string
+	Packet        byte
+	Columns       []column.Interface
+	ServerContext *column.ServerContext
+}
+
+func NewBlock() *Block {
+	return &Block{
+		ServerContext: &column.ServerContext{},
+	}
 }
 
 func (b *Block) Rows() int {
@@ -42,11 +46,11 @@ func (b *Block) Rows() int {
 }
 
 func (b *Block) AddColumn(name string, ct column.Type) error {
-	column, err := ct.Column(name, b.Timezone)
+	col, err := ct.Column(name, b.ServerContext)
 	if err != nil {
 		return err
 	}
-	b.names, b.Columns = append(b.names, name), append(b.Columns, column)
+	b.names, b.Columns = append(b.names, name), append(b.Columns, col)
 	return nil
 }
 
@@ -214,7 +218,7 @@ func (b *Block) Decode(reader *proto.Reader, revision uint64) (err error) {
 		if columnType, err = reader.Str(); err != nil {
 			return err
 		}
-		c, err := column.Type(columnType).Column(columnName, b.Timezone)
+		c, err := column.Type(columnType).Column(columnName, b.ServerContext)
 		if err != nil {
 			return err
 		}
@@ -301,8 +305,6 @@ func (e *BlockError) Error() string {
 	switch err := e.Err.(type) {
 	case *column.Error:
 		return fmt.Sprintf("clickhouse [%s]: (%s %s) %s", e.Op, e.ColumnName, err.ColumnType, err.Err)
-	case *column.DateOverflowError:
-		return fmt.Sprintf("clickhouse: dateTime overflow. %s must be between %s and %s", e.ColumnName, err.Min.Format(err.Format), err.Max.Format(err.Format))
 	}
 	return fmt.Sprintf("clickhouse [%s]: %s %s", e.Op, e.ColumnName, e.Err)
 }

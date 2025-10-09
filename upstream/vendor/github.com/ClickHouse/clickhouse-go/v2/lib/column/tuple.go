@@ -54,7 +54,7 @@ type namedCol struct {
 	colType Type
 }
 
-func (col *Tuple) parse(t Type, tz *time.Location) (_ Interface, err error) {
+func (col *Tuple) parse(t Type, sc *ServerContext) (_ Interface, err error) {
 	col.chType = t
 	var (
 		element       []rune
@@ -99,7 +99,7 @@ func (col *Tuple) parse(t Type, tz *time.Location) (_ Interface, err error) {
 		if ct.name == "" {
 			isNamed = false
 		}
-		column, err := ct.colType.Column(ct.name, tz)
+		column, err := ct.colType.Column(ct.name, sc)
 		if err != nil {
 			return nil, err
 		}
@@ -200,13 +200,6 @@ func setJSONFieldValue(field reflect.Value, value reflect.Value) error {
 		}
 	}
 
-	// check if our target is a string
-	if field.Kind() == reflect.String {
-		if v := reflect.ValueOf(fmt.Sprint(value.Interface())); v.Type().AssignableTo(field.Type()) {
-			field.Set(v)
-			return nil
-		}
-	}
 	if value.CanConvert(field.Type()) {
 		field.Set(value.Convert(field.Type()))
 		return nil
@@ -373,7 +366,13 @@ func (col *Tuple) scanStruct(targetStruct reflect.Value, row int) error {
 			}
 			sField.Set(subSlice)
 		default:
-			value := reflect.ValueOf(c.Row(row, false))
+			v := c.Row(row, false)
+			if v == nil {
+				continue
+			}
+
+			value := reflect.ValueOf(v)
+
 			if err := setJSONFieldValue(sField, value); err != nil {
 				return err
 			}
@@ -447,7 +446,7 @@ func (col *Tuple) scan(targetType reflect.Type, row int) (reflect.Value, error) 
 		//tuples can be scanned into slices - specifically default for unnamed tuples
 		rSlice, err := col.scanSlice(targetType, row)
 		if err != nil {
-			return reflect.Value{}, nil
+			return reflect.Value{}, err
 		}
 		return rSlice, nil
 	case reflect.Interface:
@@ -518,6 +517,68 @@ func (col *Tuple) AppendRow(v any) error {
 		value = value.Elem()
 	}
 	switch value.Kind() {
+	case reflect.Struct:
+		if valuer, ok := v.(driver.Valuer); ok {
+			val, err := valuer.Value()
+			if err != nil {
+				return &ColumnConverterError{
+					Op:   "AppendRow",
+					To:   string(col.chType),
+					From: fmt.Sprintf("%T", v),
+					Hint: "could not get driver.Valuer value",
+				}
+			}
+			return col.AppendRow(val)
+		}
+
+		if !col.isNamed {
+			return &Error{
+				ColumnType: string(col.chType),
+				Err:        fmt.Errorf("converting from %T is not supported for unnamed tuples - use a slice", v),
+			}
+		}
+
+		valueType := value.Type()
+		fieldNames := make(map[string]struct{}, value.NumField())
+		for i := 0; i < value.NumField(); i++ {
+			if !value.Field(i).CanInterface() {
+				// can't interface - likely not exported so ignore the field
+				continue
+			}
+			name, omit := getStructFieldName(valueType.Field(i))
+			if omit {
+				continue
+			}
+			fieldNames[name] = struct{}{}
+		}
+
+		if len(fieldNames) != len(col.columns) {
+			return &Error{
+				ColumnType: string(col.chType),
+				Err:        fmt.Errorf("invalid size. expected %d got %d", len(col.columns), len(fieldNames)),
+			}
+		}
+
+		for i := 0; i < value.NumField(); i++ {
+			if !value.Field(i).CanInterface() {
+				// can't interface - likely not exported so ignore the field
+				continue
+			}
+			name, omit := getStructFieldName(valueType.Field(i))
+			if omit {
+				continue
+			}
+			if _, ok := col.index[name]; !ok {
+				return &Error{
+					ColumnType: string(col.chType),
+					Err:        fmt.Errorf("sub column '%s' does not exist in %s", name, col.Name()),
+				}
+			}
+			if err := col.columns[col.index[name]].AppendRow(value.Field(i).Interface()); err != nil {
+				return err
+			}
+		}
+		return nil
 	case reflect.Map:
 		if !col.isNamed {
 			return &Error{

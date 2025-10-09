@@ -1,8 +1,8 @@
-The following table aims to capture the Golang types supported for each ClickHouse Column Type. 
+The following table aims to capture the Golang types supported for each ClickHouse Column Type.
 
 Whilst each ClickHouse type often has a logical Golang type, we aim to support implicit conversions where possible and provided no precision loss will be incurred - thus alleviating the need for users to ensure their data aligns perfectly with ClickHouse types.
 
-This effort is ongoing and can be seperated in to insertion (`Append`/`AppendRow`) and read time (via a `Scan`). Should you need support for a specific conversion, please raise an issue.
+This effort is ongoing and can be separated in to insertion (`Append`/`AppendRow`) and read time (via a `Scan`). Should you need support for a specific conversion, please raise an issue.
 
 ## Append Support
 
@@ -56,7 +56,7 @@ All types can be read into a pointer or pointer to a pointer.
 | uint16        |                     |        |         |      |             |       |    X   |        |        |         |         |      |       |       |       |        |        |         |         |      |      |        |          |            |       |        |       |      |         |              |
 | uint8         |                     |        |         |      |             |   X   |        |        |        |         |         |      |       |       |       |        |        |         |         |      |      |        |          |            |       |        |       |      |         |              |
 | int           |                     |        |         |      |             |       |        |        |        |         |         |      |       |       |       |        |        |         |         |      |      |        |          |            |       |        |       |      |         |              |
-| int64         |                     |        |         |      |             |       |        |        |        |         |         |      |       |       |   X   |        |        |         |         |      |      |        |          |            |       |        |       |      |         |              |
+| int64         |                     |        |         |      |             |       |        |        |        |         |         |      |       |       |   X   |        |        |         |         |      |      |        |     x    |      x     |       |        |       |      |         |              |
 | int32         |                     |        |         |      |             |       |        |        |        |         |         |      |       |   X   |       |        |        |         |         |      |      |        |          |            |       |        |       |      |         |              |
 | int16         |                     |        |         |      |             |       |        |        |        |         |         |      |   X   |       |       |        |        |         |         |      |      |        |          |            |       |        |       |      |         |              |
 | int8          |                     |        |         |      |             |       |        |        |        |         |         |   X  |       |       |       |        |        |         |         |      |      |        |          |            |       |        |       |      |         |              |

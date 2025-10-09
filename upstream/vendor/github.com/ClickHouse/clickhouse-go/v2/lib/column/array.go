@@ -18,12 +18,14 @@
 package column
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/ClickHouse/ch-go/proto"
 	"reflect"
 	"strings"
-	"time"
 )
+
+var scanTypeAny = reflect.TypeOf((*interface{})(nil)).Elem()
 
 type offset struct {
 	values   UInt64
@@ -50,7 +52,7 @@ func (col *Array) Name() string {
 	return col.name
 }
 
-func (col *Array) parse(t Type, tz *time.Location) (_ *Array, err error) {
+func (col *Array) parse(t Type, sc *ServerContext) (_ *Array, err error) {
 	col.chType = t
 	var typeStr = string(t)
 
@@ -66,7 +68,7 @@ parse:
 		}
 	}
 	if col.depth != 0 {
-		if col.values, err = Type(typeStr).Column(col.name, tz); err != nil {
+		if col.values, err = Type(typeStr).Column(col.name, sc); err != nil {
 			return nil, err
 		}
 		offsetScanTypes := make([]reflect.Type, 0, col.depth)
@@ -192,6 +194,11 @@ func appendNullableRowPlain[T any](col *Array, arr []*T) error {
 func (col *Array) append(elem reflect.Value, level int) error {
 	if level < col.depth {
 		switch elem.Kind() {
+		// allows to traverse pointers to slices and slices cast to `any`
+		case reflect.Interface, reflect.Ptr:
+			if !elem.IsNil() {
+				return col.append(elem.Elem(), level)
+			}
 		// reflect.Value.Len() & reflect.Value.Index() is called in `append` method which is only valid for
 		// Slice, Array and String that make sense here.
 		case reflect.Slice, reflect.Array, reflect.String:
@@ -263,6 +270,13 @@ func (col *Array) WriteStatePrefix(buffer *proto.Buffer) error {
 }
 
 func (col *Array) ScanRow(dest any, row int) error {
+	if scanner, ok := dest.(sql.Scanner); ok {
+		value, err := col.scan(scanTypeAny, row)
+		if err != nil {
+			return err
+		}
+		return scanner.Scan(value.Interface())
+	}
 	elem := reflect.Indirect(reflect.ValueOf(dest))
 	value, err := col.scan(elem.Type(), row)
 	if err != nil {

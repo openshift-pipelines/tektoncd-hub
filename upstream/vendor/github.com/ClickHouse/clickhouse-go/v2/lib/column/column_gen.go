@@ -25,6 +25,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"github.com/ClickHouse/ch-go/proto"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/chcol"
 	"github.com/google/uuid"
 	"github.com/paulmach/orb"
 	"github.com/shopspring/decimal"
@@ -35,7 +36,7 @@ import (
 	"time"
 )
 
-func (t Type) Column(name string, tz *time.Location) (Interface, error) {
+func (t Type) Column(name string, sc *ServerContext) (Interface, error) {
 	switch t {
 	case "Float32":
 		return &Float32{name: name}, nil
@@ -96,15 +97,15 @@ func (t Type) Column(name string, tz *time.Location) (Interface, error) {
 	case "Bool", "Boolean":
 		return &Bool{name: name}, nil
 	case "Date":
-		return &Date{name: name, location: tz}, nil
+		return &Date{name: name, location: sc.Timezone}, nil
 	case "Date32":
-		return &Date32{name: name, location: tz}, nil
+		return &Date32{name: name, location: sc.Timezone}, nil
 	case "UUID":
 		return &UUID{name: name}, nil
 	case "Nothing":
 		return &Nothing{name: name}, nil
 	case "Ring":
-		set, err := (&Array{name: name}).parse("Array(Point)", tz)
+		set, err := (&Array{name: name}).parse("Array(Point)", sc)
 		if err != nil {
 			return nil, err
 		}
@@ -114,7 +115,7 @@ func (t Type) Column(name string, tz *time.Location) (Interface, error) {
 			name: name,
 		}, nil
 	case "Polygon":
-		set, err := (&Array{name: name}).parse("Array(Ring)", tz)
+		set, err := (&Array{name: name}).parse("Array(Ring)", sc)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +125,7 @@ func (t Type) Column(name string, tz *time.Location) (Interface, error) {
 			name: name,
 		}, nil
 	case "MultiPolygon":
-		set, err := (&Array{name: name}).parse("Array(Polygon)", tz)
+		set, err := (&Array{name: name}).parse("Array(Polygon)", sc)
 		if err != nil {
 			return nil, err
 		}
@@ -136,38 +137,46 @@ func (t Type) Column(name string, tz *time.Location) (Interface, error) {
 	case "Point":
 		return &Point{name: name}, nil
 	case "String":
-		return &String{name: name, col: colStrProvider()}, nil
+		return &String{name: name, col: colStrProvider(name)}, nil
+	case "SharedVariant":
+		return &SharedVariant{name: name}, nil
 	case "Object('json')":
-		return &JSONObject{name: name, root: true, tz: tz}, nil
+		return &JSONObject{name: name, root: true, sc: sc}, nil
 	}
 
 	switch strType := string(t); {
 	case strings.HasPrefix(string(t), "Map("):
-		return (&Map{name: name}).parse(t, tz)
+		return (&Map{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Tuple("):
-		return (&Tuple{name: name}).parse(t, tz)
+		return (&Tuple{name: name}).parse(t, sc)
+	case strings.HasPrefix(string(t), "Variant("):
+		return (&Variant{name: name}).parse(t, sc)
+	case strings.HasPrefix(string(t), "Dynamic"):
+		return (&Dynamic{name: name}).parse(t, sc)
+	case strings.HasPrefix(string(t), "JSON"):
+		return (&JSON{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Decimal("):
 		return (&Decimal{name: name}).parse(t)
 	case strings.HasPrefix(strType, "Nested("):
-		return (&Nested{name: name}).parse(t, tz)
+		return (&Nested{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Array("):
-		return (&Array{name: name}).parse(t, tz)
+		return (&Array{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Interval"):
 		return (&Interval{name: name}).parse(t)
 	case strings.HasPrefix(string(t), "Nullable"):
-		return (&Nullable{name: name}).parse(t, tz)
+		return (&Nullable{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "FixedString"):
 		return (&FixedString{name: name}).parse(t)
 	case strings.HasPrefix(string(t), "LowCardinality"):
-		return (&LowCardinality{name: name}).parse(t, tz)
+		return (&LowCardinality{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "SimpleAggregateFunction"):
-		return (&SimpleAggregateFunction{name: name}).parse(t, tz)
+		return (&SimpleAggregateFunction{name: name}).parse(t, sc)
 	case strings.HasPrefix(string(t), "Enum8") || strings.HasPrefix(string(t), "Enum16"):
 		return Enum(t, name)
 	case strings.HasPrefix(string(t), "DateTime64"):
-		return (&DateTime64{name: name}).parse(t, tz)
+		return (&DateTime64{name: name}).parse(t, sc.Timezone)
 	case strings.HasPrefix(strType, "DateTime") && !strings.HasPrefix(strType, "DateTime64"):
-		return (&DateTime{name: name}).parse(t, tz)
+		return (&DateTime{name: name}).parse(t, sc.Timezone)
 	}
 	return nil, &UnsupportedColumnTypeError{
 		t: t,
@@ -255,6 +264,10 @@ var (
 	scanTypePolygon      = reflect.TypeOf(orb.Polygon{})
 	scanTypeDecimal      = reflect.TypeOf(decimal.Decimal{})
 	scanTypeMultiPolygon = reflect.TypeOf(orb.MultiPolygon{})
+	scanTypeVariant      = reflect.TypeOf(chcol.Variant{})
+	scanTypeDynamic      = reflect.TypeOf(chcol.Dynamic{})
+	scanTypeJSON         = reflect.TypeOf(chcol.JSON{})
+	scanTypeJSONString   = reflect.TypeOf("")
 )
 
 func (col *Float32) Name() string {
@@ -656,7 +669,9 @@ func (col *Int8) Append(v any) (nulls []uint8, err error) {
 		nulls = make([]uint8, len(v))
 		for i := range v {
 			val := int8(0)
-			if *v[i] {
+			if v[i] == nil {
+				nulls[i] = 1
+			} else if *v[i] {
 				val = 1
 			}
 			col.col.Append(val)
