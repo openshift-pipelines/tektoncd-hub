@@ -14,7 +14,9 @@ import (
 	"text/template"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
+
+	"github.com/go-testfixtures/testfixtures/v3/shared"
 )
 
 // Loader is the responsible to loading fixtures.
@@ -109,17 +111,37 @@ func Database(db *sql.DB) func(*Loader) error {
 	}
 }
 
+type DialectOptions func(h helper) error
+
+// WithCustomPlaceholder - allow to provide custom placeholder in queries
+func WithCustomPlaceholder(placeholder ParamType) DialectOptions {
+	return func(l helper) error {
+		if err := placeholder.Valid(); err != nil {
+			return err
+		}
+
+		l.setCustomParamType(placeholder)
+		return nil
+	}
+}
+
 // Dialect informs Loader about which database dialect you're using.
 //
 // Possible options are "postgresql", "timescaledb", "mysql", "mariadb",
 // "sqlite", "sqlserver", "clickhouse", "spanner".
-func Dialect(dialect string) func(*Loader) error {
+func Dialect(dialect string, opts ...DialectOptions) func(*Loader) error {
 	return func(l *Loader) error {
 		h, err := helperForDialect(dialect)
 		if err != nil {
 			return err
 		}
+		for _, opt := range opts {
+			if err = opt(h); err != nil {
+				return err
+			}
+		}
 		l.helper = h
+
 		return nil
 	}
 }
@@ -262,6 +284,10 @@ func SkipTableChecksumComputation() func(*Loader) error {
 // Directory informs Loader to load YAML files from a given directory.
 func Directory(dir string) func(*Loader) error {
 	return func(l *Loader) error {
+		_, ok := l.helper.(*spanner)
+		if ok {
+			return fmt.Errorf(shared.ErrorMessage_NotSupportedLoadingMethod, "Directory")
+		}
 		fixtures, err := l.fixturesFromDir(dir)
 		if err != nil {
 			return err
@@ -286,6 +312,10 @@ func Files(files ...string) func(*Loader) error {
 // Paths inform Loader to load a given set of YAML files and directories.
 func Paths(paths ...string) func(*Loader) error {
 	return func(l *Loader) error {
+		_, ok := l.helper.(*spanner)
+		if ok {
+			return fmt.Errorf(shared.ErrorMessage_NotSupportedLoadingMethod, "Paths")
+		}
 		fixtures, err := l.fixturesFromPaths(paths...)
 		if err != nil {
 			return err
@@ -607,11 +637,11 @@ func (l *Loader) buildInsertSQL(f *fixtureFile, record map[string]interface{}) (
 		}
 
 		switch l.helper.paramType() {
-		case paramTypeDollar:
+		case ParamTypeDollar:
 			sqlValues = append(sqlValues, fmt.Sprintf("$%d", i))
-		case paramTypeQuestion:
+		case ParamTypeQuestion:
 			sqlValues = append(sqlValues, "?")
-		case paramTypeAtSign:
+		case ParamTypeAtSign:
 			sqlValues = append(sqlValues, fmt.Sprintf("@p%d", i))
 		}
 
@@ -726,17 +756,14 @@ func (l *Loader) fixturesFromFilesMultiTables(fileNames ...string) ([]*fixtureFi
 			return nil, err
 		}
 
-		var data interface{}
-		if err := yaml.Unmarshal(content, &data); err != nil {
+		var tablesMap yaml.MapSlice
+		if err := yaml.UnmarshalWithOptions(content, &tablesMap, yaml.UseOrderedMap()); err != nil {
 			return nil, fmt.Errorf("testfixtures: could not unmarshal YAML: %w", err)
 		}
 
-		tables, ok := data.(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("testfixtures: could not cast tables: not a map[string]interface{}")
-		}
-
-		for table, records := range tables {
+		for _, item := range tablesMap {
+			table := item.Key.(string)
+			records := item.Value
 			result, err := l.buildInterfacesSlice(records)
 			if err != nil {
 				return nil, err
