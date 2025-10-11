@@ -16,17 +16,35 @@ package spannerdriver
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 
 	"cloud.google.com/go/spanner"
+	"github.com/googleapis/go-sql-spanner/parser"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// SpannerNamedArg can be used for query parameters with a name that (might) start
+// with an underscore. The generic database/sql package does not allow query parameters
+// to start with an underscore, but Spanner allows this, and this struct can be used to
+// work around the limitation in database/sql.
+type SpannerNamedArg struct {
+	NameInQuery string
+	Value       any
+}
+
+var _ driver.Stmt = &stmt{}
+var _ driver.StmtExecContext = &stmt{}
+var _ driver.StmtQueryContext = &stmt{}
+var _ driver.NamedValueChecker = &stmt{}
+
 type stmt struct {
-	conn    *conn
-	numArgs int
-	query   string
+	conn          *conn
+	numArgs       int
+	query         string
+	statementType parser.StatementType
+	execOptions   *ExecOptions
 }
 
 func (s *stmt) Close() error {
@@ -37,46 +55,52 @@ func (s *stmt) NumInput() int {
 	return s.numArgs
 }
 
-func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
+func (s *stmt) Exec(_ []driver.Value) (driver.Result, error) {
 	return nil, spanner.ToSpannerError(status.Errorf(codes.Unimplemented, "use ExecContext instead"))
 }
 
 func (s *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
-	return s.conn.ExecContext(ctx, s.query, args)
+	return s.conn.execContext(ctx, s.query, s.execOptions, args)
 }
 
-func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
+func (s *stmt) Query(_ []driver.Value) (driver.Rows, error) {
 	return nil, spanner.ToSpannerError(status.Errorf(codes.Unimplemented, "use QueryContext instead"))
 }
 
 func (s *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
-	ss, err := prepareSpannerStmt(s.query, args)
-	if err != nil {
-		return nil, err
-	}
-
-	var it rowIterator
-	if s.conn.tx != nil {
-		it = s.conn.tx.Query(ctx, ss)
-	} else {
-		it = &readOnlyRowIterator{s.conn.client.Single().WithTimestampBound(s.conn.readOnlyStaleness).Query(ctx, ss)}
-	}
-	return &rows{it: it}, nil
+	return s.conn.queryContext(ctx, s.query, s.execOptions, args)
 }
 
-func prepareSpannerStmt(q string, args []driver.NamedValue) (spanner.Statement, error) {
-	q, names, err := parseParameters(q)
+func (s *stmt) CheckNamedValue(value *driver.NamedValue) error {
+	if value == nil {
+		return nil
+	}
+
+	if execOptions, ok := value.Value.(ExecOptions); ok {
+		s.execOptions = &execOptions
+		return driver.ErrRemoveArgument
+	}
+	return s.conn.CheckNamedValue(value)
+}
+
+func prepareSpannerStmt(parser *parser.StatementParser, q string, args []driver.NamedValue) (spanner.Statement, error) {
+	q, names, err := parser.ParseParameters(q)
 	if err != nil {
 		return spanner.Statement{}, err
 	}
 	ss := spanner.NewStatement(q)
 	for i, v := range args {
+		value := v.Value
 		name := args[i].Name
+		if sa, ok := args[i].Value.(SpannerNamedArg); ok {
+			name = sa.NameInQuery
+			value = sa.Value
+		}
 		if name == "" && len(names) > i {
 			name = names[i]
 		}
 		if name != "" {
-			ss.Params[name] = convertParam(v.Value)
+			ss.Params[name] = convertParam(value)
 		}
 	}
 	// Verify that all parameters have a value.
@@ -215,14 +239,38 @@ func convertParam(v driver.Value) driver.Value {
 	}
 }
 
+var _ SpannerResult = &result{}
+
 type result struct {
-	rowsAffected int64
+	rowsAffected      int64
+	lastInsertId      int64
+	hasLastInsertId   bool
+	batchUpdateCounts []int64
+	tx                *sql.Tx
 }
 
+var errNoLastInsertId = spanner.ToSpannerError(
+	status.Errorf(codes.FailedPrecondition,
+		"LastInsertId is only supported for INSERT statements that use a THEN RETURN clause "+
+			"and that return exactly one row and one column "+
+			"(e.g. `INSERT INTO MyTable (Val) values ('val1') THEN RETURN Id`)"))
+
 func (r *result) LastInsertId() (int64, error) {
-	return 0, spanner.ToSpannerError(status.Errorf(codes.Unimplemented, "Cloud Spanner does not support auto-generated ids"))
+	if r.hasLastInsertId {
+		return r.lastInsertId, nil
+	}
+	return 0, errNoLastInsertId
 }
 
 func (r *result) RowsAffected() (int64, error) {
 	return r.rowsAffected, nil
+}
+
+var errNoBatchRowsAffected = spanner.ToSpannerError(status.Errorf(codes.FailedPrecondition, "BatchRowsAffected is only supported for batch DML results"))
+
+func (r *result) BatchRowsAffected() ([]int64, error) {
+	if r.batchUpdateCounts == nil {
+		return nil, errNoBatchRowsAffected
+	}
+	return r.batchUpdateCounts, nil
 }
