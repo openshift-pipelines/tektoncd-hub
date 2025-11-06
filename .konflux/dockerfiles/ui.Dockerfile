@@ -25,7 +25,6 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
-ENV BASE_PATH="/opt/app-root/src"
 ARG VERSION=hub-ui-next
 
 USER root
@@ -37,9 +36,19 @@ RUN fips-mode-setup --enable && \
     openssl version -a | grep -i fips && \
     (openssl md5 /dev/null || echo "MD5 test passed (expected failure in FIPS mode)")
 
-RUN chmod ugo+rw /opt/app-root/src/config.js && \
-    chown nginx:nginx /opt/app-root/src/config.js && \
-    chmod +x /usr/bin/start.sh
+
+# Use /tmp/config for writable config.js
+ENV BASE_PATH="/tmp/config"
+ENV CONFIG_DIR="/tmp/config"
+
+
+USER root
+# Create writable directory for config.js and ensure proper permissions
+RUN mkdir -p /tmp/config && \
+    chmod +x /usr/bin/start.sh && \
+    chgrp -R 0 /tmp/config && \
+    chmod -R g=u /tmp/config && \
+    echo 'location = /config.js { alias /tmp/config/config.js; }' > "${NGINX_DEFAULT_CONF_PATH}"/config-location.conf
 USER nginx
 
 EXPOSE 8080
