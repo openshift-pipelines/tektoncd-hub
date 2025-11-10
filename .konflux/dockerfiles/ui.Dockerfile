@@ -1,5 +1,5 @@
 # --- builder image
-ARG NODEJS_BUILDER=registry.access.redhat.com/ubi9/nodejs-20@sha256:59066dfc8fc28365fb402e7493066ade5dc709f3383ac5f75ecedb1e5e56cf4a
+ARG NODEJS_BUILDER=registry.access.redhat.com/ubi9/nodejs-20@sha256:5d78e13ba43b745fb55bc6efbd17eaf1e59cc7de885bf15c7b4d7566904ccb42
 ARG RUNTIME=registry.access.redhat.com/ubi9/nginx-124@sha256:f9f80c202baf79daaeb8638a5f7281581c486b665eac1a31f27c19a96936c438
 
 FROM $NODEJS_BUILDER AS builder
