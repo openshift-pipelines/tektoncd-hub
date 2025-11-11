@@ -1,6 +1,6 @@
 # --- builder image
-ARG NODEJS_BUILDER=registry.access.redhat.com/ubi9/nodejs-20@sha256:5d78e13ba43b745fb55bc6efbd17eaf1e59cc7de885bf15c7b4d7566904ccb42
-ARG RUNTIME=registry.access.redhat.com/ubi9/nginx-124@sha256:f9f80c202baf79daaeb8638a5f7281581c486b665eac1a31f27c19a96936c438
+ARG NODEJS_BUILDER=registry.redhat.io/ubi9/nodejs-22@sha256:78c21fef7cd601558da335619f753a5db0e02338d2cf342170e935a0af5ba122
+ARG RUNTIME=registry.access.redhat.com/ubi9/nginx-124@sha256:f9f80c202baf79daaeb8638a5f7281581c486b665eac1a31f27c19a96936c438 
 
 FROM $NODEJS_BUILDER AS builder
 
@@ -25,7 +25,6 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
-ENV BASE_PATH="/opt/app-root/src"
 ARG VERSION=hub-ui-1.20.0
 
 USER root
@@ -37,9 +36,19 @@ RUN fips-mode-setup --enable && \
     openssl version -a | grep -i fips && \
     (openssl md5 /dev/null || echo "MD5 test passed (expected failure in FIPS mode)")
 
-RUN chmod ugo+rw /opt/app-root/src/config.js && \
-    chown nginx:nginx /opt/app-root/src/config.js && \
-    chmod +x /usr/bin/start.sh
+
+# Use /tmp/config for writable config.js
+ENV BASE_PATH="/tmp/config"
+ENV CONFIG_DIR="/tmp/config"
+
+
+USER root
+# Create writable directory for config.js and ensure proper permissions
+RUN mkdir -p /tmp/config && \
+    chmod +x /usr/bin/start.sh && \
+    chgrp -R 0 /tmp/config && \
+    chmod -R g=u /tmp/config && \
+    echo 'location = /config.js { alias /tmp/config/config.js; }' > "${NGINX_DEFAULT_CONF_PATH}"/config-location.conf
 USER nginx
 
 EXPOSE 8080
