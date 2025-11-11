@@ -1,5 +1,5 @@
 contentOrigin: 
-  repofiles:
+  repofiles: 
     - ./ubi.repo 
 packages: [openssh-clients, git, shadow-utils]
 arches:
