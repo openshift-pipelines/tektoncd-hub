@@ -32,16 +32,10 @@ spec:
               memory: 500Mi
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
             runAsUser: 65532
             capabilities:
               drop:
                 - ALL
-          volumeMounts:
-            - name: config-volume
-              mountPath: /tmp/config
-            - name: tmp
-              mountPath: /tmp
           env:
             - name: API_URL
               valueFrom:
@@ -94,8 +88,3 @@ spec:
             periodSeconds: 5
             successThreshold: 1
             timeoutSeconds: 1
-      volumes:
-        - name: config-volume
-          emptyDir: {}
-        - name: tmp
-          emptyDir: {}
