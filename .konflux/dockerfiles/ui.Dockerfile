@@ -25,7 +25,7 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
-ENV BASE_PATH="/opt/app-root/src"
+COPY --from=builder $REMOTE_SOURCE/ui/image/nginx.conf "${NGINX_CONFIGURATION_PATH}"/server.conf
 ARG VERSION=hub-ui-1.21.0
 
 USER root
@@ -37,14 +37,25 @@ RUN fips-mode-setup --enable && \
     openssl version -a | grep -i fips && \
     (openssl md5 /dev/null || echo "MD5 test passed (expected failure in FIPS mode)")
 
-RUN chmod ugo+rw /opt/app-root/src/config.js && \
-    chown nginx:nginx /opt/app-root/src/config.js && \
-    chmod +x /usr/bin/start.sh
-USER nginx
+USER root
+# Create writable directory for config.js and ensure proper permissions
+# Update nginx.conf to use correct root path and include path
+RUN mkdir -p /tmp/config && \
+    chmod +x /usr/bin/start.sh && \
+    chown -R 1001:0 /tmp/config && \
+    chmod -R g+rwX /tmp/config && \
+    chmod 775 /tmp/config && \
+    sed -i 's|root   /usr/share/nginx/html;|root   /opt/app-root/src;|g' "${NGINX_CONFIGURATION_PATH}"/server.conf && \
+    sed -i 's|include /etc/nginx/conf.d/location.locations;|include '"${NGINX_DEFAULT_CONF_PATH}"'/location.locations;|g' "${NGINX_CONFIGURATION_PATH}"/server.conf
+
+# Use /tmp/config for writable config.js
+ENV CONFIG_DIR="/tmp/config"
+
+USER 1001
 
 EXPOSE 8080
 
-COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/location.locations "${NGINX_DEFAULT_CONF_PATH}"/location.conf
+COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/location.locations "${NGINX_DEFAULT_CONF_PATH}"/location.locations
 
 CMD /usr/bin/start.sh
 
