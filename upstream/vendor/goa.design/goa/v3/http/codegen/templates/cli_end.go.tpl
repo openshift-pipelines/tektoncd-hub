@@ -5,7 +5,7 @@ return cli.ParseEndpoint(
 		goahttp.RequestEncoder,
 		goahttp.ResponseDecoder,
 		debug,
-{{- if needDialer .Services }}
+{{- if needStream .Services }}
 		dialer,
 	{{- range $svc := .Services }}
 		{{- if hasWebSocket $svc }}
