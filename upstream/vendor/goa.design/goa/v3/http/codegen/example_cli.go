@@ -7,25 +7,26 @@ import (
 
 	"goa.design/goa/v3/codegen"
 	"goa.design/goa/v3/codegen/example"
+	"goa.design/goa/v3/codegen/service"
 	"goa.design/goa/v3/expr"
 )
 
 // ExampleCLIFiles returns an example client tool HTTP implementation for each
 // server expression.
-func ExampleCLIFiles(genpkg string, services *ServicesData) []*codegen.File {
+func ExampleCLIFiles(genpkg string, root *expr.RootExpr) []*codegen.File {
 	var files []*codegen.File
-	for _, svr := range services.Root.API.Servers {
-		if f := ExampleCLI(genpkg, svr, services); f != nil {
+	for _, svr := range root.API.Servers {
+		if f := exampleCLI(genpkg, root, svr); f != nil {
 			files = append(files, f)
 		}
 	}
 	return files
 }
 
-// ExampleCLI returns an example client tool HTTP implementation for the given
+// exampleCLI returns an example client tool HTTP implementation for the given
 // server expression.
-func ExampleCLI(genpkg string, svr *expr.ServerExpr, services *ServicesData) *codegen.File {
-	svrdata := example.Servers.Get(svr, services.Root)
+func exampleCLI(genpkg string, root *expr.RootExpr, svr *expr.ServerExpr) *codegen.File {
+	svrdata := example.Servers.Get(svr)
 	path := filepath.Join("cmd", svrdata.Dir+"-cli", "http.go")
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		return nil // file already exists, skip it.
@@ -51,19 +52,19 @@ func ExampleCLI(genpkg string, svr *expr.ServerExpr, services *ServicesData) *co
 		{Path: genpkg + "/http/cli/" + svrdata.Dir, Name: "cli"},
 	}
 	importScope := codegen.NewNameScope()
-	for _, svc := range services.Root.Services {
-		data := services.ServicesData.Get(svc.Name)
+	for _, svc := range root.Services {
+		data := service.Services.Get(svc.Name)
 		specs = append(specs, &codegen.ImportSpec{Path: genpkg + "/" + data.PkgName})
 		importScope.Unique(data.PkgName)
 	}
 	interceptorsPkg := importScope.Unique("interceptors", "ex")
 	specs = append(specs, &codegen.ImportSpec{Path: rootPath + "/interceptors", Name: interceptorsPkg})
-	apiPkg := importScope.Unique(strings.ToLower(codegen.Goify(services.Root.API.Name, false)), "api")
+	apiPkg := importScope.Unique(strings.ToLower(codegen.Goify(root.API.Name, false)), "api")
 	specs = append(specs, &codegen.ImportSpec{Path: rootPath, Name: apiPkg})
 
 	var svcData []*ServiceData
 	for _, svc := range svr.Services {
-		if data := services.Get(svc); data != nil {
+		if data := HTTPServices.Get(svc); data != nil {
 			svcData = append(svcData, data)
 		}
 	}
@@ -71,7 +72,7 @@ func ExampleCLI(genpkg string, svr *expr.ServerExpr, services *ServicesData) *co
 		codegen.Header("", "main", specs),
 		{
 			Name:   "cli-http-start",
-			Source: httpTemplates.Read(cliStartT),
+			Source: readTemplate("cli_start"),
 			Data: map[string]any{
 				"Services":        svcData,
 				"InterceptorsPkg": interceptorsPkg,
@@ -79,29 +80,29 @@ func ExampleCLI(genpkg string, svr *expr.ServerExpr, services *ServicesData) *co
 		},
 		{
 			Name:   "cli-http-streaming",
-			Source: httpTemplates.Read(cliStreamingT),
+			Source: readTemplate("cli_streaming"),
 			Data: map[string]any{
 				"Services": svcData,
 			},
 			FuncMap: map[string]any{
-				"needDialer": NeedDialer,
+				"needStream": needStream,
 			},
 		},
 		{
 			Name:   "cli-http-end",
-			Source: httpTemplates.Read(cliEndT),
+			Source: readTemplate("cli_end"),
 			Data: map[string]any{
 				"Services": svcData,
 				"APIPkg":   apiPkg,
 			},
 			FuncMap: map[string]any{
-				"needDialer":   NeedDialer,
-				"hasWebSocket": HasWebSocket,
+				"needStream":   needStream,
+				"hasWebSocket": hasWebSocket,
 			},
 		},
 		{
 			Name:   "cli-http-usage",
-			Source: httpTemplates.Read(cliUsageT),
+			Source: readTemplate("cli_usage"),
 		},
 	}
 	return &codegen.File{
