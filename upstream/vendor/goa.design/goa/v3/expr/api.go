@@ -44,8 +44,6 @@ type (
 		HTTP *HTTPExpr
 		// GRPC contains the gRPC specific API level expressions.
 		GRPC *GRPCExpr
-		// JSONRPC contains the JSON-RPC specific API level expressions.
-		JSONRPC *JSONRPCExpr
 
 		// random generator used to build examples for the API types.
 		ExampleGenerator *ExampleGenerator
@@ -84,7 +82,6 @@ func NewAPIExpr(name string, dsl func()) *APIExpr {
 		Name:             name,
 		HTTP:             new(HTTPExpr),
 		GRPC:             new(GRPCExpr),
-		JSONRPC:          new(JSONRPCExpr),
 		DSLFunc:          dsl,
 		ExampleGenerator: NewRandom(name),
 	}
