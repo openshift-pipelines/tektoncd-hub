@@ -63,8 +63,8 @@ const (
 )
 
 // EndpointFile returns the endpoint file for the given service.
-func EndpointFile(genpkg string, service *expr.ServiceExpr, services *ServicesData) *codegen.File {
-	svc := services.Get(service.Name)
+func EndpointFile(genpkg string, service *expr.ServiceExpr) *codegen.File {
+	svc := Services.Get(service.Name)
 	svcName := svc.PathName
 	path := filepath.Join(codegen.Gendir, svcName, "endpoints.go")
 	data := endpointData(svc)
@@ -80,57 +80,51 @@ func EndpointFile(genpkg string, service *expr.ServiceExpr, services *ServicesDa
 			codegen.GoaImport("security"),
 			{Path: genpkg + "/" + svcName + "/" + "views", Name: svc.ViewsPkg},
 		}
+		imports = append(imports, svc.UserTypeImports...)
 		header := codegen.Header(service.Name+" endpoints", svc.PkgName, imports)
 		def := &codegen.SectionTemplate{
 			Name:   "endpoints-struct",
-			Source: serviceTemplates.Read(serviceEndpointsT),
+			Source: readTemplate("service_endpoints"),
 			Data:   data,
 		}
 		sections = []*codegen.SectionTemplate{header, def}
 		for _, m := range data.Methods {
 			if m.ServerStream != nil {
-				// Generate endpoint input struct for streaming methods
-				// For JSON-RPC WebSocket with StreamingResult: generate struct (needed for stream handle)
-				// For JSON-RPC WebSocket without StreamingResult (client streaming only): no struct needed
-				// For JSON-RPC SSE: always generate struct (methods have stream params)
-				// For HTTP/gRPC: always generate endpoint input struct
-				isJSONRPCWebSocket := m.IsJSONRPC && !isJSONRPCSSE(services, service)
-				if !isJSONRPCWebSocket || (isJSONRPCWebSocket && m.ServerStream.EndpointStruct != "") {
-					sections = append(sections, &codegen.SectionTemplate{
-						Name:   "endpoint-input-struct",
-						Source: serviceTemplates.Read(serviceEndpointStreamStructT),
-						Data:   m,
-					})
-				}
+				sections = append(sections, &codegen.SectionTemplate{
+					Name:   "endpoint-input-struct",
+					Source: readTemplate("service_endpoint_stream_struct"),
+					Data:   m,
+				})
 			}
 			if m.SkipRequestBodyEncodeDecode {
 				sections = append(sections, &codegen.SectionTemplate{
 					Name:   "request-body-struct",
-					Source: serviceTemplates.Read(serviceRequestBodyStructT),
+					Source: readTemplate("service_request_body_struct"),
 					Data:   m,
 				})
 			}
 			if m.SkipResponseBodyEncodeDecode {
 				sections = append(sections, &codegen.SectionTemplate{
 					Name:   "response-body-struct",
-					Source: serviceTemplates.Read(serviceResponseBodyStructT),
+					Source: readTemplate("service_response_body_struct"),
 					Data:   m,
 				})
 			}
 		}
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "endpoints-init",
-			Source: serviceTemplates.Read(serviceEndpointsInitT),
+			Source: readTemplate("service_endpoints_init"),
 			Data:   data,
-		}, &codegen.SectionTemplate{
+		})
+		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "endpoints-use",
-			Source: serviceTemplates.Read(serviceEndpointsUseT),
+			Source: readTemplate("service_endpoints_use"),
 			Data:   data,
 		})
 		for _, m := range data.Methods {
 			sections = append(sections, &codegen.SectionTemplate{
 				Name:    "endpoint-method",
-				Source:  serviceTemplates.Read(serviceEndpointMethodT),
+				Source:  readTemplate("service_endpoint_method"),
 				Data:    m,
 				FuncMap: map[string]any{"payloadVar": payloadVar},
 			})
@@ -169,14 +163,7 @@ func endpointData(svc *Data) *EndpointsData {
 }
 
 func payloadVar(e *EndpointMethodData) string {
-	if e.ServerStream != nil {
-		if e.ServerStream.EndpointStruct != "" {
-			return "ep.Payload"
-		}
-		// JSON-RPC WebSocket has no payload for server streaming
-		return ""
-	}
-	if e.SkipRequestBodyEncodeDecode {
+	if e.ServerStream != nil || e.SkipRequestBodyEncodeDecode {
 		return "ep.Payload"
 	}
 	return "p"

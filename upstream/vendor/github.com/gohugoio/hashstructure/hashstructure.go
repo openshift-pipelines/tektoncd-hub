@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"hash"
 	"hash/fnv"
-	"math"
+	"io"
 	"reflect"
 	"time"
-	"unsafe"
 )
 
 // HashOptions are options that are available for hashing.
@@ -116,7 +115,6 @@ type walker struct {
 	ignorezerovalue bool
 	sets            bool
 	stringer        bool
-	buf             [16]byte // Reusable buffer for binary encoding
 }
 
 type visitOpts struct {
@@ -133,54 +131,8 @@ var timeType = reflect.TypeOf(time.Time{})
 // A direct hash calculation used for numeric and bool values.
 func (w *walker) hashDirect(v any) (uint64, error) {
 	w.h.Reset()
-
-	// Use direct byte manipulation for numbers instead of binary.Write to avoid allocations
-	switch val := v.(type) {
-	case int64:
-		binary.LittleEndian.PutUint64(w.buf[:8], uint64(val))
-		w.h.Write(w.buf[:8])
-	case uint64:
-		binary.LittleEndian.PutUint64(w.buf[:8], val)
-		w.h.Write(w.buf[:8])
-	case int8:
-		w.buf[0] = byte(val)
-		w.h.Write(w.buf[:1])
-	case uint8:
-		w.buf[0] = val
-		w.h.Write(w.buf[:1])
-	case int16:
-		binary.LittleEndian.PutUint16(w.buf[:2], uint16(val))
-		w.h.Write(w.buf[:2])
-	case uint16:
-		binary.LittleEndian.PutUint16(w.buf[:2], val)
-		w.h.Write(w.buf[:2])
-	case int32:
-		binary.LittleEndian.PutUint32(w.buf[:4], uint32(val))
-		w.h.Write(w.buf[:4])
-	case uint32:
-		binary.LittleEndian.PutUint32(w.buf[:4], val)
-		w.h.Write(w.buf[:4])
-	case float32:
-		binary.LittleEndian.PutUint32(w.buf[:4], math.Float32bits(val))
-		w.h.Write(w.buf[:4])
-	case float64:
-		binary.LittleEndian.PutUint64(w.buf[:8], math.Float64bits(val))
-		w.h.Write(w.buf[:8])
-	case complex64:
-		binary.LittleEndian.PutUint32(w.buf[:4], math.Float32bits(real(val)))
-		binary.LittleEndian.PutUint32(w.buf[4:8], math.Float32bits(imag(val)))
-		w.h.Write(w.buf[:8])
-	case complex128:
-		binary.LittleEndian.PutUint64(w.buf[:8], math.Float64bits(real(val)))
-		binary.LittleEndian.PutUint64(w.buf[8:16], math.Float64bits(imag(val)))
-		w.h.Write(w.buf[:16])
-	default:
-		// Fallback to binary.Write for unsupported types, for instance enums
-		err := binary.Write(w.h, binary.LittleEndian, v)
-		return w.h.Sum64(), err
-	}
-
-	return w.h.Sum64(), nil
+	err := binary.Write(w.h, binary.LittleEndian, v)
+	return w.h.Sum64(), err
 }
 
 // A direct hash calculation used for strings.
@@ -192,12 +144,10 @@ func (w *walker) hashString(s string) (uint64, error) {
 func hashString(h hash.Hash64, s string) (uint64, error) {
 	h.Reset()
 
-	// Use zero-copy conversion from string to []byte using unsafe
-	if len(s) > 0 {
-		b := unsafe.Slice(unsafe.StringData(s), len(s))
-		h.Write(b)
-	}
-	return h.Sum64(), nil
+	// io.WriteString uses io.StringWriter if it exists, which is
+	// implemented by e.g. github.com/cespare/xxhash.
+	_, err := io.WriteString(h, s)
+	return h.Sum64(), err
 }
 
 func (w *walker) visit(v reflect.Value, opts *visitOpts) (uint64, error) {
@@ -231,55 +181,23 @@ func (w *walker) visit(v reflect.Value, opts *visitOpts) (uint64, error) {
 	}
 
 	if v.CanInt() {
-		i := v.Int()
-		switch v.Kind() {
-		case reflect.Int:
-			return w.hashDirect(i)
-		case reflect.Int8:
-			return w.hashDirect(int8(i))
-		case reflect.Int16:
-			return w.hashDirect(int16(i))
-		case reflect.Int32:
-			return w.hashDirect(int32(i))
-		case reflect.Int64:
-			return w.hashDirect(i)
+		if v.Kind() == reflect.Int {
+			// binary.Write requires a fixed-size value.
+			return w.hashDirect(v.Int())
 		}
+		return w.hashDirect(v.Interface())
 	}
 
 	if v.CanUint() {
-		u := v.Uint()
-		switch v.Kind() {
-		case reflect.Uint:
-			return w.hashDirect(u)
-		case reflect.Uint8:
-			return w.hashDirect(uint8(u))
-		case reflect.Uint16:
-			return w.hashDirect(uint16(u))
-		case reflect.Uint32:
-			return w.hashDirect(uint32(u))
-		case reflect.Uint64:
-			return w.hashDirect(u)
+		if v.Kind() == reflect.Uint {
+			// binary.Write requires a fixed-size value.
+			return w.hashDirect(v.Uint())
 		}
+		return w.hashDirect(v.Interface())
 	}
 
-	if v.CanFloat() {
-		f := v.Float()
-		switch v.Kind() {
-		case reflect.Float32:
-			return w.hashDirect(float32(f))
-		case reflect.Float64:
-			return w.hashDirect(f)
-		}
-	}
-
-	if v.CanComplex() {
-		c := v.Complex()
-		switch v.Kind() {
-		case reflect.Complex64:
-			return w.hashDirect(complex64(c))
-		case reflect.Complex128:
-			return w.hashDirect(c)
-		}
+	if v.CanFloat() || v.CanComplex() {
+		return w.hashDirect(v.Interface())
 	}
 
 	k := v.Kind()
@@ -300,8 +218,8 @@ func (w *walker) visit(v reflect.Value, opts *visitOpts) (uint64, error) {
 			return 0, err
 		}
 
-		w.h.Write(b)
-		return w.h.Sum64(), nil
+		err = binary.Write(w.h, binary.LittleEndian, b)
+		return w.h.Sum64(), err
 	}
 
 	switch k {
@@ -372,10 +290,18 @@ func (w *walker) visit(v reflect.Value, opts *visitOpts) (uint64, error) {
 		return h, nil
 
 	case reflect.Struct:
+		parent := v.Interface()
 		var include Includable
-		var parent interface{}
+		if impl, ok := parent.(Includable); ok {
+			include = impl
+		}
 
-		// Check if we can address this value first (more common case for pointer receivers)
+		if impl, ok := parent.(Hashable); ok {
+			return impl.Hash()
+		}
+
+		// If we can address this value, check if the pointer value
+		// implements our interfaces and use that if so.
 		if v.CanAddr() {
 			vptr := v.Addr()
 			parentptr := vptr.Interface()
@@ -386,38 +312,18 @@ func (w *walker) visit(v reflect.Value, opts *visitOpts) (uint64, error) {
 			if impl, ok := parentptr.(Hashable); ok {
 				return impl.Hash()
 			}
-			// Only set parent if we'll need it for IncludableMap
-			parent = parentptr
-		}
-
-		// Only box the value if we haven't already found an implementation via pointer
-		if include == nil && parent == nil {
-			parent = v.Interface()
-			if impl, ok := parent.(Includable); ok {
-				include = impl
-			}
-
-			if impl, ok := parent.(Hashable); ok {
-				return impl.Hash()
-			}
 		}
 
 		t := v.Type()
-		h, err := w.hashString(t.Name())
+		h, err := w.visit(reflect.ValueOf(t.Name()), nil)
 		if err != nil {
 			return 0, err
 		}
 
 		l := v.NumField()
-		var fieldOpts visitOpts
-		// Defer boxing parent until we know we need it
-		if parent == nil {
-			parent = v.Interface()
-		}
-		fieldOpts.Struct = parent
-
 		for i := 0; i < l; i++ {
 			if innerV := v.Field(i); v.CanSet() || t.Field(i).Name != "_" {
+				var f visitFlag
 				fieldType := t.Field(i)
 				if fieldType.PkgPath != "" {
 					// Unexported
@@ -460,18 +366,21 @@ func (w *walker) visit(v reflect.Value, opts *visitOpts) (uint64, error) {
 					}
 				}
 
-				fieldOpts.Flags = 0
-				if tag == "set" {
-					fieldOpts.Flags |= visitFlagSet
+				switch tag {
+				case "set":
+					f |= visitFlagSet
 				}
 
-				kh, err := w.hashString(fieldType.Name)
+				kh, err := w.visit(reflect.ValueOf(fieldType.Name), nil)
 				if err != nil {
 					return 0, err
 				}
 
-				fieldOpts.StructField = fieldType.Name
-				vh, err := w.visit(innerV, &fieldOpts)
+				vh, err := w.visit(innerV, &visitOpts{
+					Flags:       f,
+					Struct:      parent,
+					StructField: fieldType.Name,
+				})
 				if err != nil {
 					return 0, err
 				}
@@ -526,10 +435,16 @@ func hashUpdateOrdered(h hash.Hash64, a, b uint64) uint64 {
 	// For ordered updates, use a real hash function
 	h.Reset()
 
-	var buf [16]byte
-	binary.LittleEndian.PutUint64(buf[0:8], a)
-	binary.LittleEndian.PutUint64(buf[8:16], b)
-	h.Write(buf[:])
+	// We just panic if the binary writes fail because we are writing
+	// an int64 which should never be fail-able.
+	e1 := binary.Write(h, binary.LittleEndian, a)
+	e2 := binary.Write(h, binary.LittleEndian, b)
+	if e1 != nil {
+		panic(e1)
+	}
+	if e2 != nil {
+		panic(e2)
+	}
 
 	return h.Sum64()
 }
@@ -555,9 +470,11 @@ func hashUpdateUnordered(a, b uint64) uint64 {
 func hashFinishUnordered(h hash.Hash64, a uint64) uint64 {
 	h.Reset()
 
-	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], a)
-	h.Write(buf[:])
+	// We just panic if the writes fail
+	e1 := binary.Write(h, binary.LittleEndian, a)
+	if e1 != nil {
+		panic(e1)
+	}
 
 	return h.Sum64()
 }
