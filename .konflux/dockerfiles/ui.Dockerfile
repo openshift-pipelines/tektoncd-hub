@@ -47,7 +47,7 @@ RUN mkdir -p /tmp/config && \
     chmod 775 /tmp/config && \
     sed -i 's|root   /usr/share/nginx/html;|root   /opt/app-root/src;|g' "${NGINX_CONFIGURATION_PATH}"/server.conf && \
     sed -i 's|include /etc/nginx/conf.d/location.locations;|include '"${NGINX_DEFAULT_CONF_PATH}"'/location.locations;|g' "${NGINX_CONFIGURATION_PATH}"/server.conf
-
+    rm -f /opt/app-root/src/config.js
 # Use /tmp/config for writable config.js
 ENV CONFIG_DIR="/tmp/config"
 
