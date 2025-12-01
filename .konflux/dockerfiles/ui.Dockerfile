@@ -46,6 +46,9 @@ EXPOSE 8080
 
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/location.locations "${NGINX_DEFAULT_CONF_PATH}"/location.conf
 
+# Copy static nginx fragment to the correct location
+COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/config-js.conf "${NGINX_DEFAULT_CONF_PATH}"/config-js.conf
+
 CMD /usr/bin/start.sh
 
 LABEL \
