@@ -1,0 +1,79 @@
+diff --git a/ui/src/components/Footer/__snapshots__/Footer.test.tsx.snap b/ui/src/components/Footer/__snapshots__/Footer.test.tsx.snap
+index 7b5c3a734..55715ed90 100644
+--- a/ui/src/components/Footer/__snapshots__/Footer.test.tsx.snap
++++ b/ui/src/components/Footer/__snapshots__/Footer.test.tsx.snap
+@@ -28,7 +28,7 @@ exports[`should render the footer component 1`] = `
+       <GridItem span={12} className=\\"hub-footer-description\\">
+         <Text>
+           © 
+-          2025
++          2026
+            The Linux Foundation®. All rights reserved. The Linux Foundation has registered trademarks and uses trademarks. For a list of trademarks of The Linux Foundation, please see our
+            
+           <Text component=\\"a\\" href=\\"https://www.linuxfoundation.org/trademark-usage/\\" target=\\"_\\">
+diff --git a/ui/src/components/HomePage/__snapshots__/HomePage.test.tsx.snap b/ui/src/components/HomePage/__snapshots__/HomePage.test.tsx.snap
+index e7065ec94..049fb9751 100644
+--- a/ui/src/components/HomePage/__snapshots__/HomePage.test.tsx.snap
++++ b/ui/src/components/HomePage/__snapshots__/HomePage.test.tsx.snap
+@@ -5,7 +5,7 @@ exports[`should render the home page component 1`] = `
+   <Banner variant=\\"warning\\" isSticky={true}>
+     <TextContent>
+       <Text component=\\"h1\\" className=\\"hub-banner-text\\">
+-        Tekton Hub is deprecated and will be shutdown on January 2026, the 7th.
++        Tekton Hub will be deprecated in OpenShift Pipelines v1.22.0 and removed in v1.24.0.
+       </Text>
+     </TextContent>
+   </Banner>
+diff --git a/ui/src/components/HomePage/index.tsx b/ui/src/components/HomePage/index.tsx
+index be435b0a3..431d147ab 100644
+--- a/ui/src/components/HomePage/index.tsx
++++ b/ui/src/components/HomePage/index.tsx
+@@ -4,13 +4,13 @@ import {
+   Grid,
+   GridItem,
+   PageSection,
++  Text,
+   TextContent,
+-  TextVariants,
+-  Text
++  TextVariants
+ } from '@patternfly/react-core';
+-import LeftPane from '../LeftPane';
+-import Background from '../Background';
+ import Resources from '../../containers/Resources';
++import Background from '../Background';
++import LeftPane from '../LeftPane';
+ import './HomePage.css';
+ const HomePage = () => {
+   return (
+@@ -18,7 +18,7 @@ const HomePage = () => {
+       <Banner variant="warning" isSticky={true}>
+         <TextContent>
+           <Text component={TextVariants.h1} className="hub-banner-text">
+-            Tekton Hub is deprecated and will be shutdown on January 2026, the 7th.
++            Tekton Hub will be deprecated in OpenShift Pipelines v1.22.0 and removed in v1.24.0.
+           </Text>
+         </TextContent>
+       </Banner>
+diff --git a/ui/src/containers/App/__snapshots__/App.test.tsx.snap b/ui/src/containers/App/__snapshots__/App.test.tsx.snap
+index cd736efe7..4466289ac 100644
+--- a/ui/src/containers/App/__snapshots__/App.test.tsx.snap
++++ b/ui/src/containers/App/__snapshots__/App.test.tsx.snap
+@@ -85,7 +85,7 @@ exports[`App should render the component correctly and match the snapshot 1`] =
+                             <div className=\\"pf-c-content\\">
+                               <Text component=\\"h1\\" className=\\"hub-banner-text\\">
+                                 <h1 data-ouia-component-type=\\"PF4/Text\\" data-ouia-safe={true} data-ouia-component-id=\\"OUIA-Generated-Text-2\\" data-pf-content={true} className=\\"hub-banner-text\\">
+-                                  Tekton Hub is deprecated and will be shutdown on January 2026, the 7th.
++                                  Tekton Hub will be deprecated in OpenShift Pipelines v1.22.0 and removed in v1.24.0.
+                                 </h1>
+                               </Text>
+                             </div>
+@@ -383,7 +383,7 @@ exports[`App should render the component correctly and match the snapshot 1`] =
+                               <Text>
+                                 <p data-ouia-component-type=\\"PF4/Text\\" data-ouia-safe={true} data-ouia-component-id=\\"OUIA-Generated-Text-11\\" data-pf-content={true} className=\\"\\">
+                                   © 
+-                                  2025
++                                  2026
+                                    The Linux Foundation®. All rights reserved. The Linux Foundation has registered trademarks and uses trademarks. For a list of trademarks of The Linux Foundation, please see our
+                                    
+                                   <Text component=\\"a\\" href=\\"https://www.linuxfoundation.org/trademark-usage/\\" target=\\"_\\">
