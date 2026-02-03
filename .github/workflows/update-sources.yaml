@@ -1,13 +1,9 @@
 # Generated for Konflux Application openshift-pipelines-core by openshift-pipelines/hack. DO NOT EDIT
-name: update-sources-tektoncd-hub
-
+name: update-sources
 on:
   workflow_dispatch: {}
-  schedule:
-  - cron: "0 1 * * *" # At 1AM everyday
 
 jobs:
-
   update-sources:
     runs-on: ubuntu-latest
     permissions:
@@ -24,7 +20,7 @@ jobs:
         rm -fR upstream
         git clone https://github.com/tektoncd/hub upstream
         pushd upstream
-        git checkout -B release-v1.23.x origin/release-v1.23.x
+        git checkout -B release-v1.23.6 origin/release-v1.23.6
         popd
     - name: Commit new changes
       run: |
