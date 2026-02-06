@@ -13,13 +13,13 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
       == "release-v1.22.x" &&
       ("upstream/***".pathChanged() || ".konflux/patches/***".pathChanged() || ".konflux/rpms/***".pathChanged() ||
-      ".konflux/dockerfiles/db-migration.Dockerfile".pathChanged() ||
-      ".tekton/tektoncd-hub-1-22-db-migration-pull-request.yaml".pathChanged())
+      ".konflux/dockerfiles/api.Dockerfile".pathChanged() ||
+      ".tekton/hub-1-22-api-pull-request.yaml".pathChanged())
   labels:
     appstudio.openshift.io/application: openshift-pipelines-core-1-22
-    appstudio.openshift.io/component: tektoncd-hub-1-22-db-migration
+    appstudio.openshift.io/component: hub-1-22-api
     pipelines.appstudio.openshift.io/type: build
-  name: tektoncd-hub-1-22-db-migration-on-pull-request
+  name: hub-1-22-api-on-pull-request
   namespace: tekton-ecosystem-tenant
 spec:
   params:
@@ -30,11 +30,11 @@ spec:
   - name: revision
     value: '{{revision}}'
   - name: output-image
-    value: quay.io/redhat-user-workloads/tekton-ecosystem-tenant/pipelines-hub-db-migration-rhel9:on-pr-{{revision}}
+    value: quay.io/redhat-user-workloads/tekton-ecosystem-tenant/pipelines-hub-api-rhel9:on-pr-{{revision}}
   - name: image-expires-after
     value: 5d
   - name: dockerfile
-    value: .konflux/dockerfiles/db-migration.Dockerfile
+    value: .konflux/dockerfiles/api.Dockerfile
   - name: additional-tags
     value:
       - "on-pr-v1.22.0"
@@ -47,7 +47,7 @@ spec:
   pipelineRef:
     name: docker-build-ta
   taskRunTemplate:
-    serviceAccountName: build-pipeline-tektoncd-hub-1-22-db-migration
+    serviceAccountName: build-pipeline-hub-1-22-api
   workspaces:
   - name: git-auth
     secret:
