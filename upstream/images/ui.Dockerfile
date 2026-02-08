@@ -16,9 +16,9 @@ COPY --from=BUILD /app/build /usr/share/nginx/html
 COPY ui/image/start.sh /usr/bin/
 
 USER root
-RUN chmod +x /usr/bin/start.sh && \
-    mkdir -p /tmp/config && \
-    chown -R nginx:nginx /tmp/config
+RUN chmod ugo+rw /usr/share/nginx/html/config.js  && \
+    chown nginx:nginx /usr/share/nginx/html/config.js && \
+    chmod +x /usr/bin/start.sh
 USER nginx
 
 EXPOSE 8080

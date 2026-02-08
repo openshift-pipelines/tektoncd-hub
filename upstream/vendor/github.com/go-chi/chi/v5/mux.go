@@ -107,9 +107,9 @@ func (mx *Mux) Use(middlewares ...func(http.Handler) http.Handler) {
 // Handle adds the route `pattern` that matches any http method to
 // execute the `handler` http.Handler.
 func (mx *Mux) Handle(pattern string, handler http.Handler) {
-	if i := strings.IndexAny(pattern, " \t"); i >= 0 {
-		method, rest := pattern[:i], strings.TrimLeft(pattern[i+1:], " \t")
-		mx.Method(method, rest, handler)
+	parts := strings.SplitN(pattern, " ", 2)
+	if len(parts) == 2 {
+		mx.Method(parts[0], parts[1], handler)
 		return
 	}
 
@@ -119,7 +119,13 @@ func (mx *Mux) Handle(pattern string, handler http.Handler) {
 // HandleFunc adds the route `pattern` that matches any http method to
 // execute the `handlerFn` http.HandlerFunc.
 func (mx *Mux) HandleFunc(pattern string, handlerFn http.HandlerFunc) {
-	mx.Handle(pattern, handlerFn)
+	parts := strings.SplitN(pattern, " ", 2)
+	if len(parts) == 2 {
+		mx.Method(parts[0], parts[1], handlerFn)
+		return
+	}
+
+	mx.handle(mALL, pattern, handlerFn)
 }
 
 // Method adds the route `pattern` that matches `method` http method to
@@ -357,40 +363,19 @@ func (mx *Mux) Middlewares() Middlewares {
 // Note: the *Context state is updated during execution, so manage
 // the state carefully or make a NewRouteContext().
 func (mx *Mux) Match(rctx *Context, method, path string) bool {
-	return mx.Find(rctx, method, path) != ""
-}
-
-// Find searches the routing tree for the pattern that matches
-// the method/path.
-//
-// Note: the *Context state is updated during execution, so manage
-// the state carefully or make a NewRouteContext().
-func (mx *Mux) Find(rctx *Context, method, path string) string {
 	m, ok := methodMap[method]
 	if !ok {
-		return ""
+		return false
 	}
 
-	node, _, _ := mx.tree.FindRoute(rctx, m, path)
-	pattern := rctx.routePattern
+	node, _, h := mx.tree.FindRoute(rctx, m, path)
 
-	if node != nil {
-		if node.subroutes == nil {
-			e := node.endpoints[m]
-			return e.pattern
-		}
-
+	if node != nil && node.subroutes != nil {
 		rctx.RoutePath = mx.nextRoutePath(rctx)
-		subPattern := node.subroutes.Find(rctx, method, rctx.RoutePath)
-		if subPattern == "" {
-			return ""
-		}
-
-		pattern = strings.TrimSuffix(pattern, "/*")
-		pattern += subPattern
+		return node.subroutes.Match(rctx, method, rctx.RoutePath)
 	}
 
-	return pattern
+	return h != nil
 }
 
 // NotFoundHandler returns the default Mux 404 responder whenever a route
@@ -469,9 +454,6 @@ func (mx *Mux) routeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, _, h := mx.tree.FindRoute(rctx, method, routePath); h != nil {
 		if supportsPathValue {
 			setPathValue(rctx, r)
-		}
-		if supportsPattern {
-			setPattern(rctx, r)
 		}
 
 		h.ServeHTTP(w, r)
