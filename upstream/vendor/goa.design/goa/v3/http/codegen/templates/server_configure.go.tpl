@@ -10,7 +10,7 @@
 	)
 	{
 		eh := errorHandler(ctx)
-	{{- if needDialer .Services }}
+	{{- if needStream .Services }}
 		upgrader := &websocket.Upgrader{}
 	{{- end }}
 	{{- range $svc := .Services }}
