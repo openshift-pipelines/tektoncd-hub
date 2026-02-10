@@ -16,7 +16,7 @@ RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vend
     ./api/cmd/api
 
 FROM $RUNTIME
-ARG VERSION=hub-api-1.15.3
+ARG VERSION=hub-api-1.15.4
 
 RUN dnf install -y openssh-clients git shadow-utils
 
