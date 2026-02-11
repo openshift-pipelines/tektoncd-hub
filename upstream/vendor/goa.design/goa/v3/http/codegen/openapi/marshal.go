@@ -2,7 +2,6 @@ package openapi
 
 import (
 	"encoding/json"
-	"maps"
 
 	"gopkg.in/yaml.v3"
 )
@@ -22,7 +21,9 @@ func MarshalJSON(v any, extensions map[string]any) ([]byte, error) {
 		return nil, err
 	}
 	asserted := unmarshaled.(map[string]any)
-	maps.Copy(asserted, extensions)
+	for k, v := range extensions {
+		asserted[k] = v
+	}
 	merged, err := json.Marshal(asserted)
 	if err != nil {
 		return nil, err
@@ -44,6 +45,8 @@ func MarshalYAML(v any, extensions map[string]any) (any, error) {
 	if err := yaml.Unmarshal(marshaled, &unmarshaled); err != nil {
 		return nil, err
 	}
-	maps.Copy(unmarshaled, extensions)
+	for k, v := range extensions {
+		unmarshaled[k] = v
+	}
 	return unmarshaled, nil
 }
