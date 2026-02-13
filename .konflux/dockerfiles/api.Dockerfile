@@ -40,4 +40,4 @@ LABEL \
 RUN groupadd -r -g 65532 nonroot && useradd --no-log-init -r -u 65532 -g nonroot nonroot
 USER 65532
 
-ENTRYPOINT ["/ko-app/hub-api-server"]
+ENTRYPOINT ["/ko-app/hub-api-server"]# trigger rebuild 2026-02-14
