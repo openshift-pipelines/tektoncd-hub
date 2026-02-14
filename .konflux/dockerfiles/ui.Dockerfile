@@ -1,7 +1,7 @@
 # Rebuild trigger: 1.15.4 release 2026-01-19
 # --- builder image
 ARG NODEJS_BUILDER=registry.redhat.io/ubi8/nodejs-18@sha256:77d47e5c63e2a45a5d6a5546b145278f04a1a20fcf01b8a3ffaeb1f49056cf11
-ARG RUNTIME=registry.redhat.io/ubi8/nginx-124@sha256:7d31ac929680a488225801af6f988812700e10adfe7ec6222591a43624e4004b
+ARG RUNTIME=registry.redhat.io/ubi9/nginx-126@sha256:830a7974e450e2ec93f0ca6c3a77e7ac84c2f8f71863e1ddea507ff9ee84074f
 
 FROM $NODEJS_BUILDER AS builder
 
@@ -43,7 +43,7 @@ CMD /usr/bin/start.sh
 
 LABEL \
     com.redhat.component="openshift-pipelines-hub-ui-container" \
-    name="openshift-pipelines/pipelines-hub-ui-rhel8" \
+    name="openshift-pipelines/pipelines-hub-ui-rhel9" \
     version=$VERSION \
     summary="Red Hat OpenShift Pipelines Hub UI" \
     maintainer="pipelines-extcomm@redhat.com" \
@@ -51,5 +51,5 @@ LABEL \
     io.k8s.display-name="Red Hat OpenShift Pipelines Hub UI" \
     io.k8s.description="Red Hat OpenShift Pipelines Hub UI" \
     io.openshift.tags="pipelines,tekton,openshift" \
-    cpe="cpe:/a:redhat:openshift_pipelines:1.15::el8"
+    cpe="cpe:/a:redhat:openshift_pipelines:1.15::el9"
 # trigger rebuild 2026-02-14
