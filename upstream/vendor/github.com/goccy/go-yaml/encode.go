@@ -37,9 +37,7 @@ type Encoder struct {
 	anchorRefToName            map[uintptr]string
 	anchorNameMap              map[string]struct{}
 	anchorCallback             func(*ast.AnchorNode, interface{}) error
-	customMarshalerMap         map[reflect.Type]func(context.Context, interface{}) ([]byte, error)
-	omitZero                   bool
-	omitEmpty                  bool
+	customMarshalerMap         map[reflect.Type]func(interface{}) ([]byte, error)
 	autoInt                    bool
 	useLiteralStyleIfMultiline bool
 	commentMap                 map[*Path][]*Comment
@@ -59,7 +57,7 @@ func NewEncoder(w io.Writer, opts ...EncodeOption) *Encoder {
 	return &Encoder{
 		writer:             w,
 		opts:               opts,
-		customMarshalerMap: map[reflect.Type]func(context.Context, interface{}) ([]byte, error){},
+		customMarshalerMap: map[reflect.Type]func(interface{}) ([]byte, error){},
 		line:               1,
 		column:             1,
 		offset:             0,
@@ -301,7 +299,7 @@ func (e *Encoder) existsTypeInCustomMarshalerMap(t reflect.Type) bool {
 	return false
 }
 
-func (e *Encoder) marshalerFromCustomMarshalerMap(t reflect.Type) (func(context.Context, interface{}) ([]byte, error), bool) {
+func (e *Encoder) marshalerFromCustomMarshalerMap(t reflect.Type) (func(interface{}) ([]byte, error), bool) {
 	if marshaler, exists := e.customMarshalerMap[t]; exists {
 		return marshaler, exists
 	}
@@ -331,7 +329,7 @@ func (e *Encoder) canEncodeByMarshaler(v reflect.Value) bool {
 		return true
 	case InterfaceMarshaler:
 		return true
-	case time.Time, *time.Time:
+	case time.Time:
 		return true
 	case time.Duration:
 		return true
@@ -347,7 +345,7 @@ func (e *Encoder) encodeByMarshaler(ctx context.Context, v reflect.Value, column
 	iface := v.Interface()
 
 	if marshaler, exists := e.marshalerFromCustomMarshalerMap(v.Type()); exists {
-		doc, err := marshaler(ctx, iface)
+		doc, err := marshaler(iface)
 		if err != nil {
 			return nil, err
 		}
@@ -401,21 +399,20 @@ func (e *Encoder) encodeByMarshaler(ctx context.Context, v reflect.Value, column
 	if t, ok := iface.(time.Time); ok {
 		return e.encodeTime(t, column), nil
 	}
-	// Handle *time.Time explicitly since it implements TextMarshaler and shouldn't be treated as plain text
-	if t, ok := iface.(*time.Time); ok && t != nil {
-		return e.encodeTime(*t, column), nil
-	}
 
 	if t, ok := iface.(time.Duration); ok {
 		return e.encodeDuration(t, column), nil
 	}
 
 	if marshaler, ok := iface.(encoding.TextMarshaler); ok {
-		text, err := marshaler.MarshalText()
+		doc, err := marshaler.MarshalText()
 		if err != nil {
 			return nil, err
 		}
-		node := e.encodeString(string(text), column)
+		node, err := e.encodeDocument(doc)
+		if err != nil {
+			return nil, err
+		}
 		return node, nil
 	}
 
@@ -606,8 +603,12 @@ func (e *Encoder) encodeBool(v bool) *ast.BoolNode {
 func (e *Encoder) encodeSlice(ctx context.Context, value reflect.Value) (*ast.SequenceNode, error) {
 	if e.indentSequence {
 		e.column += e.indentNum
-		defer func() { e.column -= e.indentNum }()
 	}
+	defer func() {
+		if e.indentSequence {
+			e.column -= e.indentNum
+		}
+	}()
 	column := e.column
 	sequence := ast.Sequence(token.New("-", "-", e.pos(column)), e.isFlowStyle)
 	for i := 0; i < value.Len(); i++ {
@@ -623,8 +624,12 @@ func (e *Encoder) encodeSlice(ctx context.Context, value reflect.Value) (*ast.Se
 func (e *Encoder) encodeArray(ctx context.Context, value reflect.Value) (*ast.SequenceNode, error) {
 	if e.indentSequence {
 		e.column += e.indentNum
-		defer func() { e.column -= e.indentNum }()
 	}
+	defer func() {
+		if e.indentSequence {
+			e.column -= e.indentNum
+		}
+	}()
 	column := e.column
 	sequence := ast.Sequence(token.New("-", "-", e.pos(column)), e.isFlowStyle)
 	for i := 0; i < value.Len(); i++ {
@@ -660,11 +665,11 @@ func (e *Encoder) encodeMapItem(ctx context.Context, item MapItem, column int) (
 func (e *Encoder) encodeMapSlice(ctx context.Context, value MapSlice, column int) (*ast.MappingNode, error) {
 	node := ast.Mapping(token.New("", "", e.pos(column)), e.isFlowStyle)
 	for _, item := range value {
-		encoded, err := e.encodeMapItem(ctx, item, column)
+		value, err := e.encodeMapItem(ctx, item, column)
 		if err != nil {
 			return nil, err
 		}
-		node.Values = append(node.Values, encoded)
+		node.Values = append(node.Values, value)
 	}
 	return node, nil
 }
@@ -691,15 +696,15 @@ func (e *Encoder) encodeMap(ctx context.Context, value reflect.Value, column int
 	for _, key := range keys {
 		k := reflect.ValueOf(key)
 		v := value.MapIndex(k)
-		encoded, err := e.encodeValue(ctx, v, column)
+		value, err := e.encodeValue(ctx, v, column)
 		if err != nil {
 			return nil, err
 		}
-		if e.isMapNode(encoded) {
-			encoded.AddColumn(e.indentNum)
+		if e.isMapNode(value) {
+			value.AddColumn(e.indentNum)
 		}
-		if e.isTagAndMapNode(encoded) {
-			encoded.AddColumn(e.indentNum)
+		if e.isTagAndMapNode(value) {
+			value.AddColumn(e.indentNum)
 		}
 		keyText := fmt.Sprint(key)
 		vRef := e.toPointer(v)
@@ -709,13 +714,13 @@ func (e *Encoder) encodeMap(ctx context.Context, value reflect.Value, column int
 			anchorName := aliasName
 			anchorNode := ast.Anchor(token.New("&", "&", e.pos(column)))
 			anchorNode.Name = ast.String(token.New(anchorName, anchorName, e.pos(column)))
-			anchorNode.Value = encoded
-			encoded = anchorNode
+			anchorNode.Value = value
+			value = anchorNode
 		}
 		node.Values = append(node.Values, ast.MappingValue(
 			nil,
 			e.encodeString(keyText, column),
-			encoded,
+			value,
 		))
 		e.setSmartAnchor(vRef, keyText)
 	}
@@ -729,7 +734,7 @@ type IsZeroer interface {
 	IsZero() bool
 }
 
-func (e *Encoder) isOmittedByOmitZero(v reflect.Value) bool {
+func (e *Encoder) isZeroValue(v reflect.Value) bool {
 	kind := v.Kind()
 	if z, ok := v.Interface().(IsZeroer); ok {
 		if (kind == reflect.Ptr || kind == reflect.Interface) && v.IsNil() {
@@ -740,72 +745,11 @@ func (e *Encoder) isOmittedByOmitZero(v reflect.Value) bool {
 	switch kind {
 	case reflect.String:
 		return len(v.String()) == 0
-	case reflect.Interface, reflect.Ptr, reflect.Slice, reflect.Map:
-		return v.IsNil()
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return v.Int() == 0
-	case reflect.Float32, reflect.Float64:
-		return v.Float() == 0
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return v.Uint() == 0
-	case reflect.Bool:
-		return !v.Bool()
-	case reflect.Struct:
-		vt := v.Type()
-		for i := v.NumField() - 1; i >= 0; i-- {
-			if vt.Field(i).PkgPath != "" {
-				continue // private field
-			}
-			if !e.isOmittedByOmitZero(v.Field(i)) {
-				return false
-			}
-		}
-		return true
-	}
-	return false
-}
-
-func (e *Encoder) isOmittedByOmitEmptyOption(v reflect.Value) bool {
-	switch v.Kind() {
-	case reflect.String:
-		return len(v.String()) == 0
 	case reflect.Interface, reflect.Ptr:
 		return v.IsNil()
-	case reflect.Slice, reflect.Map:
+	case reflect.Slice:
 		return v.Len() == 0
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return v.Int() == 0
-	case reflect.Float32, reflect.Float64:
-		return v.Float() == 0
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return v.Uint() == 0
-	case reflect.Bool:
-		return !v.Bool()
-	}
-	return false
-}
-
-// The current implementation of the omitempty tag combines the functionality of encoding/json's omitempty and omitzero tags.
-// This stems from a historical decision to respect the implementation of gopkg.in/yaml.v2, but it has caused confusion,
-// so we are working to integrate it into the functionality of encoding/json. (However, this will take some time.)
-// In the current implementation, in addition to the exclusion conditions of omitempty,
-// if a type implements IsZero, that implementation will be used.
-// Furthermore, for non-pointer structs, if all fields are eligible for exclusion,
-// the struct itself will also be excluded. These behaviors are originally the functionality of omitzero.
-func (e *Encoder) isOmittedByOmitEmptyTag(v reflect.Value) bool {
-	kind := v.Kind()
-	if z, ok := v.Interface().(IsZeroer); ok {
-		if (kind == reflect.Ptr || kind == reflect.Interface) && v.IsNil() {
-			return true
-		}
-		return z.IsZero()
-	}
-	switch kind {
-	case reflect.String:
-		return len(v.String()) == 0
-	case reflect.Interface, reflect.Ptr:
-		return v.IsNil()
-	case reflect.Slice, reflect.Map:
+	case reflect.Map:
 		return v.Len() == 0
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return v.Int() == 0
@@ -821,7 +765,7 @@ func (e *Encoder) isOmittedByOmitEmptyTag(v reflect.Value) bool {
 			if vt.Field(i).PkgPath != "" {
 				continue // private field
 			}
-			if !e.isOmittedByOmitEmptyTag(v.Field(i)) {
+			if !e.isZeroValue(v.Field(i)) {
 				return false
 			}
 		}
@@ -867,7 +811,7 @@ func (e *Encoder) encodeAnchor(anchorName string, value ast.Node, fieldValue ref
 func (e *Encoder) encodeStruct(ctx context.Context, value reflect.Value, column int) (ast.Node, error) {
 	node := ast.Mapping(token.New("", "", e.pos(column)), e.isFlowStyle)
 	structType := value.Type()
-	fieldMap, err := structFieldMap(structType)
+	structFieldMap, err := structFieldMap(structType)
 	if err != nil {
 		return nil, err
 	}
@@ -879,93 +823,85 @@ func (e *Encoder) encodeStruct(ctx context.Context, value reflect.Value, column 
 			continue
 		}
 		fieldValue := value.FieldByName(field.Name)
-		sf := fieldMap[field.Name]
-		if (e.omitZero || sf.IsOmitZero) && e.isOmittedByOmitZero(fieldValue) {
-			// omit encoding by omitzero tag or OmitZero option.
-			continue
-		}
-		if e.omitEmpty && e.isOmittedByOmitEmptyOption(fieldValue) {
-			// omit encoding by OmitEmpty option.
-			continue
-		}
-		if sf.IsOmitEmpty && e.isOmittedByOmitEmptyTag(fieldValue) {
-			// omit encoding by omitempty tag.
+		structField := structFieldMap[field.Name]
+		if structField.IsOmitEmpty && e.isZeroValue(fieldValue) {
+			// omit encoding
 			continue
 		}
 		ve := e
-		if !e.isFlowStyle && sf.IsFlow {
+		if !e.isFlowStyle && structField.IsFlow {
 			ve = &Encoder{}
 			*ve = *e
 			ve.isFlowStyle = true
 		}
-		encoded, err := ve.encodeValue(ctx, fieldValue, column)
+		value, err := ve.encodeValue(ctx, fieldValue, column)
 		if err != nil {
 			return nil, err
 		}
-		if e.isMapNode(encoded) {
-			encoded.AddColumn(e.indentNum)
+		if e.isMapNode(value) {
+			value.AddColumn(e.indentNum)
 		}
-		var key ast.MapKeyNode = e.encodeString(sf.RenderName, column)
+		var key ast.MapKeyNode = e.encodeString(structField.RenderName, column)
 		switch {
-		case encoded.Type() == ast.AliasType:
-			if aliasName := sf.AliasName; aliasName != "" {
-				alias, ok := encoded.(*ast.AliasNode)
+		case value.Type() == ast.AliasType:
+			if aliasName := structField.AliasName; aliasName != "" {
+				alias, ok := value.(*ast.AliasNode)
 				if !ok {
-					return nil, errors.ErrUnexpectedNodeType(encoded.Type(), ast.AliasType, encoded.GetToken())
+					return nil, errors.ErrUnexpectedNodeType(value.Type(), ast.AliasType, value.GetToken())
 				}
 				got := alias.Value.String()
 				if aliasName != got {
 					return nil, fmt.Errorf("expected alias name is %q but got %q", aliasName, got)
 				}
 			}
-			if sf.IsInline {
+			if structField.IsInline {
 				// if both used alias and inline, output `<<: *alias`
 				key = ast.MergeKey(token.New("<<", "<<", e.pos(column)))
 			}
-		case sf.AnchorName != "":
-			anchorNode, err := e.encodeAnchor(sf.AnchorName, encoded, fieldValue, column)
+		case structField.AnchorName != "":
+			anchorNode, err := e.encodeAnchor(structField.AnchorName, value, fieldValue, column)
 			if err != nil {
 				return nil, err
 			}
-			encoded = anchorNode
-		case sf.IsInline:
-			isAutoAnchor := sf.IsAutoAnchor
+			value = anchorNode
+		case structField.IsInline:
+			isAutoAnchor := structField.IsAutoAnchor
 			if !hasInlineAnchorField {
 				hasInlineAnchorField = isAutoAnchor
 			}
 			if isAutoAnchor {
 				inlineAnchorValue = fieldValue
 			}
-			mapNode, ok := encoded.(ast.MapNode)
+			mapNode, ok := value.(ast.MapNode)
 			if !ok {
 				// if an inline field is null, skip encoding it
-				if _, ok := encoded.(*ast.NullNode); ok {
+				if _, ok := value.(*ast.NullNode); ok {
 					continue
 				}
 				return nil, errors.New("inline value is must be map or struct type")
 			}
 			mapIter := mapNode.MapRange()
 			for mapIter.Next() {
-				mapKey := mapIter.Key()
-				mapValue := mapIter.Value()
-				keyName := mapKey.GetToken().Value
-				if fieldMap.isIncludedRenderName(keyName) {
-					// if declared the same key name, skip encoding this field
+				key := mapIter.Key()
+				value := mapIter.Value()
+				keyName := key.GetToken().Value
+				if structFieldMap.isIncludedRenderName(keyName) {
+					// if declared same key name, skip encoding this field
 					continue
 				}
-				mapKey.AddColumn(-e.indentNum)
-				mapValue.AddColumn(-e.indentNum)
-				node.Values = append(node.Values, ast.MappingValue(nil, mapKey, mapValue))
+				key.AddColumn(-e.indentNum)
+				value.AddColumn(-e.indentNum)
+				node.Values = append(node.Values, ast.MappingValue(nil, key, value))
 			}
 			continue
-		case sf.IsAutoAnchor:
-			anchorNode, err := e.encodeAnchor(sf.RenderName, encoded, fieldValue, column)
+		case structField.IsAutoAnchor:
+			anchorNode, err := e.encodeAnchor(structField.RenderName, value, fieldValue, column)
 			if err != nil {
 				return nil, err
 			}
-			encoded = anchorNode
+			value = anchorNode
 		}
-		node.Values = append(node.Values, ast.MappingValue(nil, key, encoded))
+		node.Values = append(node.Values, ast.MappingValue(nil, key, value))
 	}
 	if hasInlineAnchorField {
 		node.AddColumn(e.indentNum)
