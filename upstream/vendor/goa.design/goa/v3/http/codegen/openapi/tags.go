@@ -23,7 +23,7 @@ type Tag struct {
 
 // TagsFromExpr extracts the OpenAPI related metadata from the given expression.
 func TagsFromExpr(mdata expr.MetaExpr) (tags []*Tag) {
-	keys := make([]string, 0, len(mdata))
+	var keys []string
 	for k := range mdata {
 		keys = append(keys, k)
 	}
@@ -73,7 +73,7 @@ func TagsFromExpr(mdata expr.MetaExpr) (tags []*Tag) {
 		}
 	}
 
-	return tags
+	return
 }
 
 // TagNamesFromExpr computes the names of the OpenAPI tags specified in the

@@ -30,7 +30,7 @@ type Decoder struct {
 	referenceReaders     []io.Reader
 	anchorNodeMap        map[string]ast.Node
 	anchorValueMap       map[string]reflect.Value
-	customUnmarshalerMap map[reflect.Type]func(context.Context, interface{}, []byte) error
+	customUnmarshalerMap map[reflect.Type]func(interface{}, []byte) error
 	commentMaps          []CommentMap
 	toCommentMap         CommentMap
 	opts                 []DecodeOption
@@ -54,7 +54,7 @@ func NewDecoder(r io.Reader, opts ...DecodeOption) *Decoder {
 		reader:               r,
 		anchorNodeMap:        map[string]ast.Node{},
 		anchorValueMap:       map[string]reflect.Value{},
-		customUnmarshalerMap: map[reflect.Type]func(context.Context, interface{}, []byte) error{},
+		customUnmarshalerMap: map[reflect.Type]func(interface{}, []byte) error{},
 		opts:                 opts,
 		referenceReaders:     []io.Reader{},
 		referenceFiles:       []string{},
@@ -295,7 +295,7 @@ func (d *Decoder) addSequenceNodeCommentToMap(node *ast.SequenceNode) {
 func (d *Decoder) addFootCommentToMap(node ast.Node) {
 	var (
 		footComment     *ast.CommentGroupNode
-		footCommentPath = node.GetPath()
+		footCommentPath string = node.GetPath()
 	)
 	switch n := node.(type) {
 	case *ast.SequenceNode:
@@ -637,29 +637,20 @@ func (d *Decoder) convertValue(v reflect.Value, typ reflect.Type, src ast.Node) 
 		return v.Convert(typ), nil
 	}
 	// cast value to string
-	var strVal string
 	switch v.Type().Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		strVal = strconv.FormatInt(v.Int(), 10)
+		return reflect.ValueOf(strconv.FormatInt(v.Int(), 10)), nil
 	case reflect.Float32, reflect.Float64:
-		strVal = fmt.Sprint(v.Float())
+		return reflect.ValueOf(fmt.Sprint(v.Float())), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		strVal = strconv.FormatUint(v.Uint(), 10)
+		return reflect.ValueOf(strconv.FormatUint(v.Uint(), 10)), nil
 	case reflect.Bool:
-		strVal = strconv.FormatBool(v.Bool())
-	default:
-		if !v.Type().ConvertibleTo(typ) {
-			return reflect.Zero(typ), errors.ErrTypeMismatch(typ, v.Type(), src.GetToken())
-		}
-		return v.Convert(typ), nil
+		return reflect.ValueOf(strconv.FormatBool(v.Bool())), nil
 	}
-
-	val := reflect.ValueOf(strVal)
-	if val.Type() != typ {
-		// Handle named types, e.g., `type MyString string`
-		val = val.Convert(typ)
+	if !v.Type().ConvertibleTo(typ) {
+		return reflect.Zero(typ), errors.ErrTypeMismatch(typ, v.Type(), src.GetToken())
 	}
-	return val, nil
+	return v.Convert(typ), nil
 }
 
 func (d *Decoder) deleteStructKeys(structType reflect.Type, unknownFields map[string]ast.Node) error {
@@ -722,7 +713,7 @@ func (d *Decoder) existsTypeInCustomUnmarshalerMap(t reflect.Type) bool {
 	return false
 }
 
-func (d *Decoder) unmarshalerFromCustomUnmarshalerMap(t reflect.Type) (func(context.Context, interface{}, []byte) error, bool) {
+func (d *Decoder) unmarshalerFromCustomUnmarshalerMap(t reflect.Type) (func(interface{}, []byte) error, bool) {
 	if unmarshaler, exists := d.customUnmarshalerMap[t]; exists {
 		return unmarshaler, exists
 	}
@@ -765,7 +756,7 @@ func (d *Decoder) decodeByUnmarshaler(ctx context.Context, dst reflect.Value, sr
 		if err != nil {
 			return err
 		}
-		if err := unmarshaler(ctx, ptrValue.Interface(), b); err != nil {
+		if err := unmarshaler(ptrValue.Interface(), b); err != nil {
 			return err
 		}
 		return nil
@@ -891,9 +882,6 @@ func (d *Decoder) decodeValue(ctx context.Context, dst reflect.Value, src ast.No
 	if d.isExceededMaxDepth() {
 		return ErrExceededMaxDepth
 	}
-	if !dst.IsValid() {
-		return nil
-	}
 
 	if src.Type() == ast.AnchorType {
 		anchor, _ := src.(*ast.AnchorNode)
@@ -942,8 +930,6 @@ func (d *Decoder) decodeValue(ctx context.Context, dst reflect.Value, src ast.No
 		v := reflect.ValueOf(srcVal)
 		if v.IsValid() {
 			dst.Set(v)
-		} else {
-			dst.Set(reflect.Zero(valueType))
 		}
 	case reflect.Map:
 		return d.decodeMap(ctx, dst, src)
@@ -1451,7 +1437,7 @@ func (d *Decoder) decodeStruct(ctx context.Context, dst reflect.Value, src ast.N
 	}
 
 	if d.validator != nil {
-		if err := d.validator.Struct(dst.Addr().Interface()); err != nil {
+		if err := d.validator.Struct(dst.Interface()); err != nil {
 			ev := reflect.ValueOf(err)
 			if ev.Type().Kind() == reflect.Slice {
 				for i := 0; i < ev.Len(); i++ {
@@ -1467,10 +1453,7 @@ func (d *Decoder) decodeStruct(ctx context.Context, dst reflect.Value, src ast.N
 					node, exists := keyToNodeMap[structField.RenderName]
 					if exists {
 						// TODO: to make FieldError message cutomizable
-						return errors.ErrSyntax(
-							fmt.Sprintf("%s", err),
-							d.getParentMapTokenIfExistsForValidationError(node.Type(), node.GetToken()),
-						)
+						return errors.ErrSyntax(fmt.Sprintf("%s", err), node.GetToken())
 					} else if t := src.GetToken(); t != nil && t.Prev != nil && t.Prev.Prev != nil {
 						// A missing required field will not be in the keyToNodeMap
 						// the error needs to be associated with the parent of the source node
@@ -1482,37 +1465,6 @@ func (d *Decoder) decodeStruct(ctx context.Context, dst reflect.Value, src ast.N
 		}
 	}
 	return nil
-}
-
-// getParentMapTokenIfExists if the NodeType is a container type such as MappingType or SequenceType,
-// it is necessary to return the parent MapNode's colon token to represent the entire container.
-func (d *Decoder) getParentMapTokenIfExistsForValidationError(typ ast.NodeType, tk *token.Token) *token.Token {
-	if tk == nil {
-		return nil
-	}
-	if typ == ast.MappingType {
-		// map:
-		//   key: value
-		//      ^ current token ( colon )
-		if tk.Prev == nil {
-			return tk
-		}
-		key := tk.Prev
-		if key.Prev == nil {
-			return tk
-		}
-		return key.Prev
-	}
-	if typ == ast.SequenceType {
-		// map:
-		//   - value
-		//   ^ current token ( sequence entry )
-		if tk.Prev == nil {
-			return tk
-		}
-		return tk.Prev
-	}
-	return tk
 }
 
 func (d *Decoder) decodeArray(ctx context.Context, dst reflect.Value, src ast.Node) error {
@@ -1906,7 +1858,7 @@ func (d *Decoder) parse(ctx context.Context, bytes []byte) (*ast.File, error) {
 		if err != nil {
 			return nil, err
 		}
-		if v != nil || (doc.Body != nil && doc.Body.Type() == ast.NullType) {
+		if v != nil {
 			normalizedFile.Docs = append(normalizedFile.Docs, doc)
 			cm := CommentMap{}
 			maps.Copy(cm, d.toCommentMap)
@@ -1944,13 +1896,6 @@ func (d *Decoder) decodeInit(ctx context.Context) error {
 func (d *Decoder) decode(ctx context.Context, v reflect.Value) error {
 	d.decodeDepth = 0
 	d.anchorValueMap = make(map[string]reflect.Value)
-	if len(d.parsedFile.Docs) == 0 {
-		// empty document.
-		dst := v.Elem()
-		if dst.IsValid() {
-			dst.Set(reflect.Zero(dst.Type()))
-		}
-	}
 	if len(d.parsedFile.Docs) <= d.streamIndex {
 		return io.EOF
 	}
@@ -1981,11 +1926,14 @@ func (d *Decoder) Decode(v interface{}) error {
 // and stores it in the value pointed to by v with context.Context.
 func (d *Decoder) DecodeContext(ctx context.Context, v interface{}) error {
 	rv := reflect.ValueOf(v)
-	if !rv.IsValid() || rv.Type().Kind() != reflect.Ptr {
+	if rv.Type().Kind() != reflect.Ptr {
 		return ErrDecodeRequiredPointerType
 	}
 	if d.isInitialized() {
 		if err := d.decode(ctx, rv); err != nil {
+			if err == io.EOF {
+				return err
+			}
 			return err
 		}
 		return nil
@@ -1994,6 +1942,9 @@ func (d *Decoder) DecodeContext(ctx context.Context, v interface{}) error {
 		return err
 	}
 	if err := d.decode(ctx, rv); err != nil {
+		if err == io.EOF {
+			return err
+		}
 		return err
 	}
 	return nil
