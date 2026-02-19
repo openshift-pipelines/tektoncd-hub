@@ -2,7 +2,6 @@ package expr
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"goa.design/goa/v3/eval"
@@ -213,7 +212,6 @@ func (a *AttributeExpr) Validate(ctx string, parent eval.Expression) *eval.Valid
 	if v := a.Validation; v != nil {
 		verr.Merge(v.Validate(ctx, parent))
 	}
-	verr.Merge(a.validateExamples(ctx, parent))
 	if o := AsObject(a.Type); o != nil {
 		for _, n := range a.AllRequired() {
 			if a.Find(n) == nil {
@@ -322,12 +320,6 @@ func (a *AttributeExpr) Finalize() {
 			}
 			a.Merge(ru.Attribute())
 		}
-
-		// Now that we've merged the bases, we can clear them.  This
-		// avoids issues where the bases are dupped and modifications
-		// made to the originals are not reflected in the dups.
-		a.Bases = nil
-
 		for _, nat := range *AsObject(a.Type) {
 			if pkgPath != "" {
 				if u := AsUnion(nat.Attribute.Type); u != nil {
@@ -420,7 +412,12 @@ func (a *AttributeExpr) AllRequired() []string {
 // attribute, false otherwise. This method only applies to attributes of type
 // Object.
 func (a *AttributeExpr) IsRequired(attName string) bool {
-	return slices.Contains(a.AllRequired(), attName)
+	for _, name := range a.AllRequired() {
+		if name == attName {
+			return true
+		}
+	}
+	return false
 }
 
 // IsRequiredNoDefault returns true if the given string matches the name of a
@@ -661,7 +658,7 @@ func (a *AttributeExpr) debug(prefix string, seen map[*AttributeExpr]int, indent
 	if rt, ok := a.Type.(*ResultTypeExpr); ok {
 		fmt.Printf("%s%sviews\n", tabs, tab)
 		for _, v := range rt.Views {
-			nats := *AsObject(v.Type)
+			nats := *AsObject(v.AttributeExpr.Type)
 			keys := make([]string, len(nats))
 			for i, n := range nats {
 				keys[i] = n.Name
@@ -712,8 +709,11 @@ func (a *AttributeExpr) validateEnumDefault(ctx string, parent eval.Expression) 
 	verr := new(eval.ValidationErrors)
 	if a.DefaultValue != nil && a.Validation != nil && a.Validation.Values != nil {
 		var found bool
-		if slices.Contains(a.Validation.Values, a.DefaultValue) {
-			found = true
+		for _, e := range a.Validation.Values {
+			if e == a.DefaultValue {
+				found = true
+				break
+			}
 		}
 		if !found {
 			verr.Add(
@@ -723,18 +723,6 @@ func (a *AttributeExpr) validateEnumDefault(ctx string, parent eval.Expression) 
 				a.DefaultValue,
 				a.Validation.Values,
 			)
-		}
-	}
-	return verr
-}
-
-// validateExamples makes sure that the attribute example values are compatible
-// with the attribute type.
-func (a *AttributeExpr) validateExamples(ctx string, parent eval.Expression) *eval.ValidationErrors {
-	verr := new(eval.ValidationErrors)
-	for _, ex := range a.UserExamples {
-		if !a.Type.IsCompatible(ex.Value) { // DSL ensures ex.Value is not nil
-			verr.Add(parent, "%sexample value %#v is incompatible with type %s", ctx, ex.Value, a.Type.Name())
 		}
 	}
 	return verr
@@ -858,7 +846,13 @@ func (v *ValidationExpr) Merge(other *ValidationExpr) {
 // AddRequired merges the required fields into v.
 func (v *ValidationExpr) AddRequired(required ...string) {
 	for _, r := range required {
-		found := slices.Contains(v.Required, r)
+		found := false
+		for _, rr := range v.Required {
+			if r == rr {
+				found = true
+				break
+			}
+		}
 		if !found {
 			v.Required = append(v.Required, r)
 		}
