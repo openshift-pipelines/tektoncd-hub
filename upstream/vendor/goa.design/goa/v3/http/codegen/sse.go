@@ -55,10 +55,6 @@ type (
 		// RequestIDField is the name of the payload field that maps to the Last-Event-ID header if any.
 		// If empty, no last event id is included in the request.
 		RequestIDField string
-		// RequestIDPointer indicates whether the RequestIDField is a pointer (i.e., optional primitive).
-		RequestIDPointer bool
-		// HasResponseBody indicates whether an HTTP response body converter exists for this endpoint.
-		HasResponseBody bool
 	}
 )
 
@@ -70,50 +66,20 @@ func initSSEData(ed *EndpointData, e *expr.HTTPEndpointExpr, sd *ServiceData) {
 
 	md := ed.Method
 	svc := sd.Service
-
-	// Use streaming result type if different from result
-	var eventType *ResultData
-	var eventAttr *expr.AttributeExpr
-	if e.MethodExpr.HasMixedResults() && e.MethodExpr.StreamingResult != nil {
-		// For mixed results, use StreamingResult for SSE events
-		eventAttr = e.MethodExpr.StreamingResult
-		eventType = &ResultData{
-			Name:     md.StreamingResult,
-			Ref:      sd.Service.Scope.GoFullTypeRef(eventAttr, svc.PkgName),
-			IsStruct: expr.IsObject(eventAttr.Type),
-		}
-	} else {
-		// Use Result for SSE events (backward compatibility)
-		eventType = ed.Result
-		eventAttr = e.MethodExpr.Result
-	}
-
-	sendDesc := fmt.Sprintf("%s streams instances of %q to the %q endpoint SSE connection.", md.ServerStream.SendName, eventType.Name, md.Name)
-	sendWithContextDesc := fmt.Sprintf("%s streams instances of %q to the %q endpoint SSE connection with context.", md.ServerStream.SendWithContextName, eventType.Name, md.Name)
+	sendDesc := fmt.Sprintf("%s streams instances of %q to the %q endpoint SSE connection.", md.ServerStream.SendName, ed.Result.Name, md.Name)
+	sendWithContextDesc := fmt.Sprintf("%s streams instances of %q to the %q endpoint SSE connection with context.", md.ServerStream.SendWithContextName, ed.Result.Name, md.Name)
 	recvDesc := fmt.Sprintf("%s connects to the %q SSE endpoint and streams events.", md.ServerStream.RecvName, md.Name)
 
-	// Convert attribute names to Go field names
-	var dataFieldVar, dataFieldTypeRef, idFieldVar, eventFieldVar, retryFieldVar string
-	if obj := expr.AsObject(eventAttr.Type); obj != nil {
-		for _, nat := range *obj {
-			switch nat.Name {
-			case e.SSE.IDField:
-				idFieldVar = codegen.GoifyAtt(nat.Attribute, nat.Name, true)
-			case e.SSE.EventField:
-				eventFieldVar = codegen.GoifyAtt(nat.Attribute, nat.Name, true)
-			case e.SSE.RetryField:
-				retryFieldVar = codegen.GoifyAtt(nat.Attribute, nat.Name, true)
-			case e.SSE.DataField:
-				dataFieldVar = codegen.GoifyAtt(nat.Attribute, nat.Name, true)
-				dataFieldTypeRef = sd.Service.Scope.GoFullTypeRef(nat.Attribute, svc.PkgName)
+	var dataFieldTypeRef string
+	if e.SSE.DataField != "" {
+		if obj, ok := e.MethodExpr.Result.Type.(*expr.Object); ok {
+			for _, nat := range *obj {
+				if nat.Name == e.SSE.DataField {
+					dataFieldTypeRef = sd.Service.Scope.GoFullTypeRef(nat.Attribute, svc.PkgName)
+					break
+				}
 			}
 		}
-	}
-
-	// Determine if the Last-Event-ID mapped payload attribute is a primitive pointer
-	ridPtr := false
-	if e.SSE.RequestIDField != "" {
-		ridPtr = e.MethodExpr.Payload.IsPrimitivePointer(e.SSE.RequestIDField, true)
 	}
 
 	ed.SSE = &SSEData{
@@ -125,32 +91,22 @@ func initSSEData(ed *EndpointData, e *expr.HTTPEndpointExpr, sd *ServiceData) {
 		SendWithContextDesc: sendWithContextDesc,
 		RecvName:            md.ClientStream.RecvName,
 		RecvDesc:            recvDesc,
-		EventTypeRef:        eventType.Ref,
-		EventTypeName:       eventType.Name,
-		EventIsStruct:       eventType.IsStruct,
+		EventTypeRef:        ed.Result.Ref,
+		EventTypeName:       ed.Result.Name,
+		EventIsStruct:       ed.Result.IsStruct,
 		DataFieldTypeRef:    dataFieldTypeRef,
-		DataField:           dataFieldVar,
-		IDField:             idFieldVar,
-		EventField:          eventFieldVar,
-		RetryField:          retryFieldVar,
+		DataField:           e.SSE.DataField,
+		IDField:             e.SSE.IDField,
+		EventField:          e.SSE.EventField,
+		RetryField:          e.SSE.RetryField,
 		RequestIDField:      e.SSE.RequestIDField,
-		RequestIDPointer:    ridPtr,
-	}
-
-	if ed.Result != nil {
-		for _, resp := range ed.Result.Responses {
-			if len(resp.ServerBody) > 0 {
-				ed.SSE.HasResponseBody = true
-				break
-			}
-		}
 	}
 }
 
 // sseServerFile returns the file implementing the SSE server
 // streaming implementation if any.
-func sseServerFile(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData) *codegen.File {
-	data := services.Get(svc.Name())
+func sseServerFile(genpkg string, svc *expr.HTTPServiceExpr) *codegen.File {
+	data := HTTPServices.Get(svc.Name())
 	if data == nil {
 		return nil
 	}
@@ -180,8 +136,8 @@ func sseServerFile(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesD
 				{Path: "time"},
 				{Path: "encoding/json"},
 				{Path: "fmt"},
-				{Path: genpkg + "/" + codegen.SnakeCase(svc.Name()), Name: data.Service.PkgName},
-				{Path: genpkg + "/" + codegen.SnakeCase(svc.Name()) + "/views", Name: data.Service.ViewsPkg},
+				{Path: genpkg + "/" + codegen.SnakeCase(svc.Name())},
+				{Path: genpkg + "/" + codegen.SnakeCase(svc.Name()) + "/views"},
 			},
 		),
 	}
@@ -197,26 +153,25 @@ func sseTemplateSections(data *ServiceData) []*codegen.SectionTemplate {
 			continue
 		}
 		// Create a map of template functions needed for the SSE template
-	funcs := map[string]any{
-		"dict": func(values ...any) (map[string]any, error) {
-			if len(values)%2 != 0 {
-				return nil, fmt.Errorf("odd number of arguments")
-			}
-			dict := make(map[string]any, len(values)/2)
-			for i := 0; i < len(values); i += 2 {
-				key, ok := values[i].(string)
-				if !ok {
-					return nil, fmt.Errorf("dict keys must be strings")
+		funcs := map[string]interface{}{
+			"dict": func(values ...any) (map[string]any, error) {
+				if len(values)%2 != 0 {
+					return nil, fmt.Errorf("odd number of arguments")
 				}
-				dict[key] = values[i+1]
-			}
-			return dict, nil
-		},
-		"goify": codegen.Goify,
-	}
+				dict := make(map[string]any, len(values)/2)
+				for i := 0; i < len(values); i += 2 {
+					key, ok := values[i].(string)
+					if !ok {
+						return nil, fmt.Errorf("dict keys must be strings")
+					}
+					dict[key] = values[i+1]
+				}
+				return dict, nil
+			},
+		}
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:    "server-sse",
-			Source:  httpTemplates.Read(serverSseT, sseFormatP),
+			Source:  readTemplate("server_sse", "sse_format"),
 			Data:    ed,
 			FuncMap: funcs,
 		})
@@ -224,13 +179,13 @@ func sseTemplateSections(data *ServiceData) []*codegen.SectionTemplate {
 	return sections
 }
 
-// IsSSEEndpoint returns true if the endpoint defines a streaming result
+// isSSEEndpoint returns true if the endpoint defines a streaming result
 // with SSE.
-func IsSSEEndpoint(ed *EndpointData) bool {
+func isSSEEndpoint(ed *EndpointData) bool {
 	return ed.SSE != nil
 }
 
-// HasSSE returns true if at least one endpoint in the service uses SSE.
-func HasSSE(data *ServiceData) bool {
-	return slices.ContainsFunc(data.Endpoints, IsSSEEndpoint)
+// hasSSE returns true if at least one endpoint in the service uses SSE.
+func hasSSE(data *ServiceData) bool {
+	return slices.ContainsFunc(data.Endpoints, isSSEEndpoint)
 }
