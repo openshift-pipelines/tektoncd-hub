@@ -3,6 +3,8 @@ package testfixtures
 import (
 	"database/sql"
 	"fmt"
+
+	"github.com/go-testfixtures/testfixtures/v3/shared"
 )
 
 type clickhouse struct {
@@ -21,17 +23,14 @@ func (h *clickhouse) init(_ *sql.DB) error {
 	return nil
 }
 
-func (*clickhouse) paramType() int {
-	return paramTypeDollar
-}
-
-func (*clickhouse) databaseName(q queryable) (string, error) {
+func (clickhouse) getDefaultParamType() ParamType { return ParamTypeDollar }
+func (*clickhouse) databaseName(q shared.Queryable) (string, error) {
 	var dbName string
 	err := q.QueryRow("SELECT DATABASE()").Scan(&dbName)
 	return dbName, err
 }
 
-func (h *clickhouse) tableNames(q queryable) ([]string, error) {
+func (h *clickhouse) tableNames(q shared.Queryable) ([]string, error) {
 	query := `
 		SELECT name
 		FROM system.tables
