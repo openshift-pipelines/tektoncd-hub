@@ -71,9 +71,9 @@ func Comment(elems ...string) string {
 // end-of-line marker is NL.
 func Indent(s, prefix string) string {
 	var (
+		res []byte
 		b   = []byte(s)
 		p   = []byte(prefix)
-		res = make([]byte, 0, len(b)+len(b)/4*len(p)) // preallocate with estimated size
 		bol = true
 	)
 	for _, c := range b {
@@ -98,7 +98,7 @@ var toLower = map[string]string{"OAuth": "oauth"}
 // If acronym is true and a part of the string is a common acronym
 // then it keeps the part capitalized (firstUpper = true)
 // (e.g. APIVersion) or lowercase (firstUpper = false) (e.g. apiVersion).
-func CamelCase(name string, firstUpper, acronym bool) string {
+func CamelCase(name string, firstUpper bool, acronym bool) string {
 	if name == "" {
 		return ""
 	}
@@ -119,13 +119,12 @@ func CamelCase(name string, firstUpper, acronym bool) string {
 		// remove leading invalid identifiers
 		runes = removeInvalidAtIndex(i, runes)
 
-		switch {
-		case i+1 == len(runes):
+		if i+1 == len(runes) {
 			eow = true
-		case !validIdentifier(runes[i]):
+		} else if !validIdentifier(runes[i]) {
 			// get rid of it
 			runes = append(runes[:i], runes[i+1:]...)
-		case runes[i+1] == '_':
+		} else if runes[i+1] == '_' {
 			// underscore; shift the remainder forward over any run of underscores
 			eow = true
 			n := 1
@@ -134,7 +133,7 @@ func CamelCase(name string, firstUpper, acronym bool) string {
 			}
 			copy(runes[i+1:], runes[i+n+1:])
 			runes = runes[:len(runes)-n]
-		case isLower(runes[i]) && !isLower(runes[i+1]):
+		} else if isLower(runes[i]) && !isLower(runes[i+1]) {
 			// lower->non-lower
 			eow = true
 		}
@@ -191,9 +190,8 @@ func SnakeCase(name string) string {
 	// between with a single underscore
 	name = strings.Join(strings.Fields(name), "_")
 
-	// Special handling for dashes and slashes to convert them into underscores
+	// Special handling for dashes to convert them into underscores
 	name = strings.ReplaceAll(name, "-", "_")
-	name = strings.ReplaceAll(name, "/", "_")
 
 	var b bytes.Buffer
 	ln := len(name)
@@ -296,12 +294,11 @@ func InitStructFields(args []*InitArgData, targetVar, sourcePkg, targetPkg strin
 				code += "if " + arg.Name + " != nil {\n"
 				cast = fmt.Sprintf("%s(*%s)", t, arg.Name)
 			}
-			switch {
-			case arg.FieldPointer:
+			if arg.FieldPointer {
 				code += fmt.Sprintf("tmp%s := %s\n%s.%s = &tmp%s\n", arg.Name, cast, targetVar, arg.FieldName, arg.Name)
-			case arg.FieldName != "":
+			} else if arg.FieldName != "" {
 				code += fmt.Sprintf("%s.%s = %s\n", targetVar, arg.FieldName, cast)
-			default:
+			} else {
 				code += fmt.Sprintf("%s := %s\n", targetVar, cast)
 			}
 			if arg.Pointer {
@@ -345,7 +342,7 @@ func runeSpacePosRev(r []rune) int {
 }
 
 func runeSpacePos(r []rune) int {
-	for i := range r {
+	for i := 0; i < len(r); i++ {
 		if unicode.IsSpace(r[i]) {
 			return i
 		}
