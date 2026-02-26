@@ -24,15 +24,16 @@ COPY head ${KO_DATA_PATH}/HEAD
 EXPOSE 8000
 
 LABEL \
-    com.redhat.component="openshift-pipelines-hub-db-migration-container" \
-    name="openshift-pipelines/pipelines-hub-db-migration-rhel9" \
-    version=$VERSION \
-    summary="Red Hat OpenShift Pipelines Hub DB Migration" \
-    maintainer="pipelines-extcomm@redhat.com" \
-    description="Red Hat OpenShift Pipelines Hub DB Migration" \
-    io.k8s.display-name="Red Hat OpenShift Pipelines Hub DB Migration" \
-    io.k8s.description="Red Hat OpenShift Pipelines Hub DB Migration" \
-    io.openshift.tags="pipelines,tekton,openshift"
+      com.redhat.component="openshift-pipelines-hub-db-migration-rhel9-container" \
+      cpe="cpe:/a:redhat:openshift_pipelines:next::el9" \
+      description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
+      io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
+      io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
+      io.openshift.tags="tekton,openshift,tektoncd-hub,db-migration" \
+      maintainer="pipelines-extcomm@redhat.com" \
+      name="openshift-pipelines/pipelines-hub-db-migration-rhel9" \
+      summary="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
+      version="next"
 
 
 RUN groupadd -r -g 65532 nonroot && useradd --no-log-init -r -u 65532 -g nonroot nonroot

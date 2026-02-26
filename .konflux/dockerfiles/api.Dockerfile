@@ -26,15 +26,16 @@ COPY head ${KO_DATA_PATH}/HEAD
 EXPOSE 8000
 
 LABEL \
-    com.redhat.component="openshift-pipelines-hub-api-container" \
-    name="openshift-pipelines/pipelines-hub-api-rhel9" \
-    version=$VERSION \
-    summary="Red Hat OpenShift Pipelines Hub API" \
-    maintainer="pipelines-extcomm@redhat.com" \
-    description="Red Hat OpenShift Pipelines Hub API" \
-    io.k8s.display-name="Red Hat OpenShift Pipelines Hub API" \
-    io.k8s.description="Red Hat OpenShift Pipelines Hub API" \
-    io.openshift.tags="pipelines,tekton,openshift"
+      com.redhat.component="openshift-pipelines-hub-api-rhel9-container" \
+      cpe="cpe:/a:redhat:openshift_pipelines:next::el9" \
+      description="Red Hat OpenShift Pipelines tektoncd-hub api" \
+      io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub api" \
+      io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub api" \
+      io.openshift.tags="tekton,openshift,tektoncd-hub,api" \
+      maintainer="pipelines-extcomm@redhat.com" \
+      name="openshift-pipelines/pipelines-hub-api-rhel9" \
+      summary="Red Hat OpenShift Pipelines tektoncd-hub api" \
+      version="next"
 
 RUN groupadd -r -g 65532 nonroot && useradd --no-log-init -r -u 65532 -g nonroot nonroot
 USER 65532
