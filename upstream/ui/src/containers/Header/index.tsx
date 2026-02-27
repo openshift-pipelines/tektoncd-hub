@@ -99,7 +99,6 @@ const Header: React.FC = observer(() => {
         }
         headerTools={headerTools}
       />
-
       <Modal
         variant={ModalVariant.small}
         title="Search tips:"
