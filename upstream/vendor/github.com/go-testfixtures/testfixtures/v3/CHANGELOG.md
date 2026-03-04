@@ -1,5 +1,39 @@
 # Changelog
 
+## v3.19.0 - 2025-10-25
+- fix: apply templates only when requested ([#342](https://github.com/go-testfixtures/testfixtures/pull/342) by @lansfy)
+- test: remove zeebo/assert ([#339](https://github.com/go-testfixtures/testfixtures/pull/339) by @slsyy)
+- test: add examples for parallel testing ideas ([#337](https://github.com/go-testfixtures/testfixtures/pull/337) by @slsyy)
+- test: use testcontainers for dbtests ([#332](https://github.com/go-testfixtures/testfixtures/pull/332) by @slsyy)
+- chore(go): update minimal go version to 1.24 (by @andreynering)
+- docs: use proper test command in an example (by @andreynering)
+- ci: use official task github action (by @andreynering)
+- Updated dependencies.
+
+## v3.18.0 - 2025-08-24
+- feat: use go.work to reduce core library dependencies([#257](https://github.com/go-testfixtures/testfixtures/pull/257) by @slsyy)
+- docs: add automatic string conversion documentation ([#318](https://github.com/go-testfixtures/testfixtures/pull/318) by @alingse)
+
+## v3.17.0 - 2025-07-14
+- feat: make placeholder configurable regardless of dialect ([#305](https://github.com/go-testfixtures/testfixtures/pull/305) by @levopmik and @peakle)
+- feat: support spanner json columns ([#309](https://github.com/go-testfixtures/testfixtures/pull/309) by @nu0ma)
+- Updated dependencies.
+
+## v3.16.0 - 2025-05-25
+- feat: migrate from gopkg.in/yaml.v3 to github.com/goccy/go-yaml ([#290](https://github.com/go-testfixtures/testfixtures/pull/290) by @tomnewton)
+- feat: add support for interleaved tables in spanner ([#290](https://github.com/go-testfixtures/testfixtures/pull/290) by @tomnewton)
+- perf: identify identity columns once during init for postgres (#289) ([#289](https://github.com/go-testfixtures/testfixtures/pull/289) by @kolaente)
+- feat: adds support for foreign keys constraints for composite primary keys in spanner ([#287](https://github.com/go-testfixtures/testfixtures/pull/287) by @tomnewton)
+
+## v3.15.0 - 2025-05-11
+
+- feat: support quoted columns in postgresql ([#286](https://github.com/go-testfixtures/testfixtures/pull/286) by @HTechHQ)
+- test: move all db tests to dbtest package ([#251](https://github.com/go-testfixtures/testfixtures/pull/251) by @slsyy)
+- chore: remove spanner underscore import ([#250](https://github.com/go-testfixtures/testfixtures/pull/250) by @slsyy)
+- Upgraded to Go v1.23 ([#281](https://github.com/go-testfixtures/testfixtures/pull/281) by @slsyy)
+- Updated golangci-lint and CI ([#281](https://github.com/go-testfixtures/testfixtures/pull/281) by @slsyy)
+- Updated dependencies.
+
 ## v3.14.0 - 2024-12-22
 
 - feat(mysql): make multistatements parameter optional ([#249](https://github.com/go-testfixtures/testfixtures/pull/249) by @slsyy)
