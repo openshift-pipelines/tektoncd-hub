@@ -10,12 +10,7 @@ tasks:
   lint:
     desc: Runs golangci-lint
     cmds:
-      - go list -f '{{"{{.Dir}}"}}' -m | xargs -I@ sh -c 'cd @ && pwd && golangci-lint run'
-
-  test:
-    desc: Runs all tests
-    cmds:
-      - go test work -v ./...
+      - golangci-lint run
 
   test-cli:
     cmds:
@@ -25,49 +20,63 @@ tasks:
     desc: Test PostgreSQL
     cmds:
       - task: test-db
-        vars: {TEST_NAME: TestPostgreSQL}
+        vars: {DATABASE: postgresql}
 
   test:mysql:
     desc: Test MySQL
     cmds:
       - task: test-db
-        vars: {TEST_NAME: TestMySQL}
+        vars: {DATABASE: mysql}
 
   test:sqlite:
     desc: Test SQLite
     cmds:
       - task: test-db
-        vars: {TEST_NAME: TestSQLite}
+        vars: {DATABASE: sqlite}
 
   test:sqlserver:
     desc: Test SQLServer
     cmds:
       - task: test-db
-        vars: {TEST_NAME: TestSQLServer}
+        vars: {DATABASE: sqlserver}
 
   test:crdb:
     desc: Test CockroachDB
     cmds:
       - task: test-db
-        vars: {TEST_NAME: TestCockroachDB}
+        vars: {DATABASE: cockroachdb}
 
   test:clickhouse:
     desc: Test Clickhouse
     cmds:
       - task: test-db
-        vars: {TEST_NAME: TestClickhouse}
+        vars: {DATABASE: clickhouse}
 
   test:spanner:
     desc: Test Spanner with GoogleSQL dialect
     cmds:
       - task: test-db
-        vars: {TEST_NAME: TestSpanner}
+        vars: {DATABASE: spanner}
 
   test-db:
     cmds:
-      -  go test work -v -run {{.TEST_NAME}} ./...
+      - go test -v -tags {{.DATABASE}}
 
   goreleaser:test:
     desc: Tests release process without publishing
     cmds:
       - goreleaser --snapshot --clean
+
+  docker:
+    cmds:
+      - task: docker:build
+      - task: docker:test
+
+  docker:build:
+    cmds:
+      - docker build -t testfixtures .
+
+  docker:test:
+    cmds:
+      - docker compose down -v --remove-orphans
+      - docker compose run testfixtures go test -v -tags 'postgresql sqlite mysql sqlserver cockroachdb clickhouse spanner'
