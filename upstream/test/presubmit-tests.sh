@@ -110,6 +110,15 @@ api-unittest() {
   }
 }
 
+api-golangci-lint() {
+
+  export GOFLAGS="-mod=vendor"
+  make api-lint || {
+    err 'go lint failed'
+    return 1
+  }
+}
+
 yaml-lint() {
 
   make yaml-lint  || {
@@ -122,7 +131,7 @@ goa-gen() {
   go version
 
   export GOFLAGS=""
-  go install goa.design/goa/v3/cmd/goa@v3.20.0
+  go install goa.design/goa/v3/cmd/goa@v3.19.1
 
   goa version
 
@@ -229,6 +238,7 @@ unit_tests() {
       set -eu -o pipefail
 
       api-unittest || return 1
+      api-golangci-lint || return 1
     ) || exit 1
   } || echo "No changes detected related to API"
 

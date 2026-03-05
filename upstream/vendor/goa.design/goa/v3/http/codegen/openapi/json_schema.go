@@ -187,14 +187,13 @@ func GenerateServiceDefinition(api *expr.APIExpr, res *expr.HTTPServiceExpr) {
 				} else {
 					identifier = ""
 				}
-				switch {
-				case targetSchema == nil:
+				if targetSchema == nil {
 					targetSchema = TypeSchemaWithPrefix(api, mt, a.Name())
-				case targetSchema.AnyOf == nil:
+				} else if targetSchema.AnyOf == nil {
 					firstSchema := targetSchema
 					targetSchema = NewSchema()
 					targetSchema.AnyOf = []*Schema{firstSchema, TypeSchemaWithPrefix(api, mt, a.Name())}
-				default:
+				} else {
 					targetSchema.AnyOf = append(targetSchema.AnyOf, TypeSchemaWithPrefix(api, mt, a.Name()))
 				}
 			}
@@ -487,9 +486,6 @@ func buildAttributeSchema(api *expr.APIExpr, s *Schema, at *expr.AttributeExpr) 
 	s.Description = at.Description
 	s.Example = at.Example(api.ExampleGenerator)
 	s.Extensions = ExtensionsFromExpr(at.Meta)
-	if ap := AdditionalPropertiesFromExpr(at.Meta); ap != nil {
-		s.AdditionalProperties = ap
-	}
 	initAttributeValidation(s, at)
 
 	return s
@@ -596,13 +592,4 @@ func MustGenerate(meta expr.MetaExpr) bool {
 		return false
 	}
 	return true
-}
-
-// AdditionalPropertiesFromExpr extracts the OpenAPI additionalProperties.
-func AdditionalPropertiesFromExpr(meta expr.MetaExpr) any {
-	m, ok := meta.Last("openapi:additionalProperties")
-	if ok && m == "false" {
-		return false
-	}
-	return nil
 }
