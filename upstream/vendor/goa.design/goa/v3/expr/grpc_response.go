@@ -200,12 +200,11 @@ func (r *GRPCResponseExpr) Finalize(a *GRPCEndpointExpr, svcAtt *AttributeExpr) 
 	} else {
 		// method result is not an object type. Initialize response header or
 		// trailer metadata if defined or else initialize response message.
-		switch {
-		case !r.Headers.IsEmpty():
+		if !r.Headers.IsEmpty() {
 			initAttrFromDesign(r.Headers.AttributeExpr, svcAtt)
-		case !r.Trailers.IsEmpty():
+		} else if !r.Trailers.IsEmpty() {
 			initAttrFromDesign(r.Trailers.AttributeExpr, svcAtt)
-		default:
+		} else {
 			initAttrFromDesign(r.Message, svcAtt)
 		}
 	}

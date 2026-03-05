@@ -8,22 +8,31 @@ import (
 	"goa.design/goa/v3/expr"
 )
 
-// ServerTypeFiles returns the server types files containing all the server
-// interfaces and types needed to implement gRPC server.
-func ServerTypeFiles(genpkg string, services *ServicesData) []*codegen.File {
-	fw := make([]*codegen.File, len(services.Root.API.GRPC.Services))
-	for i, svc := range services.Root.API.GRPC.Services {
-		fw[i] = serverType(genpkg, svc, services)
+// ServerTypeFiles returns the types file for every gRPC service that contain
+// constructors to transform:
+//
+//   - protocol buffer request message types into service payload types
+//   - service result types into protocol buffer response message types
+func ServerTypeFiles(genpkg string, root *expr.RootExpr) []*codegen.File {
+	fw := make([]*codegen.File, len(root.API.GRPC.Services))
+	seen := make(map[string]struct{})
+	for i, r := range root.API.GRPC.Services {
+		fw[i] = serverType(genpkg, r, seen)
 	}
 	return fw
 }
 
-// serverType returns the file defining the gRPC server types.
-func serverType(genpkg string, svc *expr.GRPCServiceExpr, services *ServicesData) *codegen.File {
+// serverType returns the file containing the constructor functions to
+// transform the gRPC request types to the corresponding service payload types
+// and service result types to the corresponding gRPC response types.
+//
+// seen keeps track of the constructor names that have already been generated
+// to prevent duplicate code generation.
+func serverType(genpkg string, svc *expr.GRPCServiceExpr, _ map[string]struct{}) *codegen.File {
 	var (
 		initData []*InitData
 
-		sd         = services.Get(svc.Name())
+		sd         = GRPCServices.Get(svc.Name())
 		foundInits = make(map[string]struct{})
 	)
 	{
@@ -70,28 +79,7 @@ func serverType(genpkg string, svc *expr.GRPCServiceExpr, services *ServicesData
 			{Path: path.Join(genpkg, svcName, "views"), Name: sd.Service.ViewsPkg},
 			{Path: path.Join(genpkg, "grpc", svcName, pbPkgName), Name: sd.PkgName},
 		}
-		// Add imports if Any type is used
-		needsAnyTypeImports := false
-		for _, e := range svc.GRPCEndpoints {
-			if hasAnyType(e.MethodExpr.Payload) || hasAnyType(e.MethodExpr.Result) {
-				needsAnyTypeImports = true
-				break
-			}
-			for _, er := range e.MethodExpr.Errors {
-				if hasAnyType(er.AttributeExpr) {
-					needsAnyTypeImports = true
-					break
-				}
-			}
-			if needsAnyTypeImports {
-				break
-			}
-		}
-		if needsAnyTypeImports {
-			imports = append(imports, &codegen.ImportSpec{Path: "google.golang.org/protobuf/types/known/anypb", Name: "anypb"})
-			imports = append(imports, &codegen.ImportSpec{Path: "encoding/json"})
-			imports = append(imports, &codegen.ImportSpec{Path: "google.golang.org/protobuf/types/known/structpb", Name: "structpb"})
-		}
+		imports = append(imports, sd.Service.UserTypeImports...)
 		imports = append(imports, sd.Service.ProtoImports...)
 		sections = []*codegen.SectionTemplate{codegen.Header(svc.Name()+" gRPC server types", "server", imports)}
 		for _, init := range initData {
@@ -100,7 +88,7 @@ func serverType(genpkg string, svc *expr.GRPCServiceExpr, services *ServicesData
 			}
 			sections = append(sections, &codegen.SectionTemplate{
 				Name:   "server-type-init",
-				Source: grpcTemplates.Read(grpcTypeInitT),
+				Source: readTemplate("type_init"),
 				Data:   init,
 				FuncMap: map[string]any{
 					"isAlias": expr.IsAlias,
@@ -120,14 +108,14 @@ func serverType(genpkg string, svc *expr.GRPCServiceExpr, services *ServicesData
 			}
 			sections = append(sections, &codegen.SectionTemplate{
 				Name:   "server-validate",
-				Source: grpcTemplates.Read(grpcValidateT),
+				Source: readTemplate("validate"),
 				Data:   data,
 			})
 		}
 		for _, h := range sd.transformHelpers {
 			sections = append(sections, &codegen.SectionTemplate{
 				Name:   "server-transform-helper",
-				Source: grpcTemplates.Read(grpcTransformHelperT),
+				Source: readTemplate("transform_helper"),
 				Data:   h,
 			})
 		}
