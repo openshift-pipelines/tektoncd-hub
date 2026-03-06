@@ -102,17 +102,19 @@ func NewLength(a *AttributeExpr, r *ExampleGenerator) int {
 			maxlength = float64(*a.Validation.MaxLength)
 		}
 		count := 0
-		switch {
-		case math.IsInf(minlength, 1):
+		if math.IsInf(minlength, 1) {
 			count = int(maxlength) - (r.Int() % 3)
-		case math.IsInf(maxlength, -1):
+		} else if math.IsInf(maxlength, -1) {
 			count = int(minlength) + (r.Int() % 3)
-		case minlength < maxlength:
-			diff := min(int(maxlength-minlength), maxLength)
+		} else if minlength < maxlength {
+			diff := int(maxlength - minlength)
+			if diff > maxLength {
+				diff = maxLength
+			}
 			count = int(minlength) + (r.Int() % diff)
-		case minlength == maxlength:
+		} else if minlength == maxlength {
 			count = int(minlength)
-		default:
+		} else {
 			panic("Validation: MinLength > MaxLength")
 		}
 		if count > maxLength {
@@ -163,14 +165,14 @@ func byLength(a *AttributeExpr, r *ExampleGenerator) any {
 	case MapKind:
 		raw := make(map[any]any)
 		m := a.Type.(*Map)
-		for range count {
+		for i := 0; i < count; i++ {
 			raw[m.KeyType.Example(r)] = m.ElemType.Example(r)
 		}
 		return m.MakeMap(raw)
 	case ArrayKind:
 		raw := make([]any, count)
 		ar := a.Type.(*Array)
-		for i := range count {
+		for i := 0; i < count; i++ {
 			raw[i] = ar.ElemType.Example(r)
 		}
 		return ar.MakeSlice(raw)
@@ -256,14 +258,14 @@ func patgen(re *syntax.Regexp, r *ExampleGenerator) string {
 	case syntax.OpStar:
 		var res strings.Builder
 		count := r.Int() % 3
-		for range count {
+		for i := 0; i < count; i++ {
 			res.WriteString(patgen(re.Sub[0], r))
 		}
 		return res.String()
 	case syntax.OpPlus:
 		var res strings.Builder
 		count := r.Int()%2 + 1
-		for range count {
+		for i := 0; i < count; i++ {
 			res.WriteString(patgen(re.Sub[0], r))
 		}
 		return res.String()
@@ -299,84 +301,83 @@ func byMinMax(a *AttributeExpr, r *ExampleGenerator) any {
 		return nil
 	}
 	var (
-		minimum float64
-		maximum = math.Inf(1)
-		sign    = 1
+		min  float64
+		max  = math.Inf(1)
+		sign = 1
 	)
 	if a.Validation.ExclusiveMaximum != nil {
-		maximum = *a.Validation.ExclusiveMaximum
+		max = *a.Validation.ExclusiveMaximum
 	} else if a.Validation.Maximum != nil {
-		maximum = *a.Validation.Maximum
+		max = *a.Validation.Maximum
 	}
-	switch {
-	case a.Validation.ExclusiveMinimum != nil:
-		minimum = *a.Validation.ExclusiveMinimum
-	case a.Validation.Minimum != nil:
-		minimum = *a.Validation.Minimum
-	default:
+	if a.Validation.ExclusiveMinimum != nil {
+		min = *a.Validation.ExclusiveMinimum
+	} else if a.Validation.Minimum != nil {
+		min = *a.Validation.Minimum
+	} else {
 		sign = -1
-		minimum = maximum
-		maximum = math.Inf(1)
+		min = max
+		max = math.Inf(1)
 	}
 
-	if math.IsInf(maximum, 1) {
+	if math.IsInf(max, 1) {
 		switch a.Type.Kind() {
 		case IntKind:
-			return sign * (r.Int() + int(minimum))
+			return sign * (r.Int() + int(min))
 		case Int32Kind:
-			return int32(sign) * (r.Int32() + int32(minimum))
+			return int32(sign) * (r.Int32() + int32(min))
 		case Int64Kind:
-			return int64(sign) * (r.Int64() + int64(minimum))
+			return int64(sign) * (r.Int64() + int64(min))
 		case UIntKind:
-			return r.UInt() + uint(minimum)
+			return r.UInt() + uint(min)
 		case UInt32Kind:
-			return r.UInt32() + uint32(minimum)
+			return r.UInt32() + uint32(min)
 		case UInt64Kind:
-			return r.UInt64() + uint64(minimum)
+			return r.UInt64() + uint64(min)
 		case Float32Kind:
-			return float32(sign) * (r.Float32() + float32(minimum))
+			return float32(sign) * (r.Float32() + float32(min))
 		default:
-			return float64(sign) * (r.Float64() + minimum)
+			return float64(sign) * (r.Float64() + min)
 		}
 	}
-	if minimum < maximum {
-		delta := maximum - minimum
+	if min < max {
+		delta := max - min
 		switch a.Type.Kind() {
 		case IntKind:
-			return r.Int()%int(delta) + int(minimum)
+			return r.Int()%int(delta) + int(min)
 		case Int32Kind:
-			return r.Int32()%int32(delta) + int32(minimum)
+			return r.Int32()%int32(delta) + int32(min)
 		case Int64Kind:
-			return r.Int64()%int64(delta) + int64(minimum)
+			return r.Int64()%int64(delta) + int64(min)
 		case UIntKind:
-			return r.UInt()%uint(delta) + uint(minimum)
+			return r.UInt()%uint(delta) + uint(min)
 		case UInt32Kind:
-			return r.UInt32()%uint32(delta) + uint32(minimum)
+			return r.UInt32()%uint32(delta) + uint32(min)
 		case UInt64Kind:
-			return r.UInt64()%uint64(delta) + uint64(minimum)
+			return r.UInt64()%uint64(delta) + uint64(min)
 		case Float32Kind:
-			return r.Float32()*float32(delta) + float32(minimum)
+			return r.Float32()*float32(delta) + float32(min)
 		default:
-			return r.Float64()*delta + minimum
+			return r.Float64()*delta + min
 		}
 	}
 	switch a.Type.Kind() {
 	case IntKind:
-		return int(minimum)
+		return int(min)
 	case Int32Kind:
-		return int32(minimum)
+		return int32(min)
 	case Int64Kind:
-		return int64(minimum)
+		return int64(min)
 	case UIntKind:
-		return uint(minimum)
+		return uint(min)
 	case UInt32Kind:
-		return uint32(minimum)
+		return uint32(min)
 	case UInt64Kind:
-		return uint64(minimum)
+		return uint64(min)
 	case Float32Kind:
-		return float32(minimum)
+		return float32(min)
 	default:
-		return minimum
+		return min
 	}
 }
 
@@ -399,31 +400,31 @@ func checkMinMaxValue(a *AttributeExpr, example any) bool {
 	if !hasMinMaxValidation(a) {
 		return true
 	}
-	var minimum *float64
+	var min *float64
 	if a.Validation.ExclusiveMinimum != nil {
-		minimum = a.Validation.ExclusiveMinimum
+		min = a.Validation.ExclusiveMinimum
 	}
 	if a.Validation.Minimum != nil {
-		minimum = a.Validation.Minimum
+		min = a.Validation.Minimum
 	}
-	if minimum != nil {
-		if v, ok := example.(int); ok && float64(v) < *minimum {
+	if min != nil {
+		if v, ok := example.(int); ok && float64(v) < *min {
 			return false
-		} else if v, ok := example.(float64); ok && v < *minimum {
+		} else if v, ok := example.(float64); ok && v < *min {
 			return false
 		}
 	}
-	var maximum *float64
+	var max *float64
 	if a.Validation.ExclusiveMaximum != nil {
-		maximum = a.Validation.ExclusiveMaximum
+		max = a.Validation.ExclusiveMaximum
 	}
 	if a.Validation.Maximum != nil {
-		maximum = a.Validation.Maximum
+		max = a.Validation.Maximum
 	}
-	if maximum != nil {
-		if v, ok := example.(int); ok && float64(v) > *maximum {
+	if max != nil {
+		if v, ok := example.(int); ok && float64(v) > *max {
 			return false
-		} else if v, ok := example.(float64); ok && v > *maximum {
+		} else if v, ok := example.(float64); ok && v > *max {
 			return false
 		}
 	}
