@@ -27,7 +27,7 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
 ENV BASE_PATH="/opt/app-root/src"
-ARG VERSION=hub-1.18-1
+ARG VERSION=1.18
 
 USER root
 RUN chmod ugo+rw /opt/app-root/src/config.js && \
@@ -43,13 +43,13 @@ COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/location.locations "${N
 CMD /usr/bin/start.sh
 
 LABEL \
-      com.redhat.component="openshift-pipelines-hub-ui-rhel9-container" \
-      cpe="cpe:/a:redhat:openshift_pipelines:1.18::el9" \
-      description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-      io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-      io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-      io.openshift.tags="tekton,openshift,tektoncd-hub,ui" \
-      maintainer="pipelines-extcomm@redhat.com" \
-      name="openshift-pipelines/pipelines-hub-ui-rhel9" \
-      summary="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-      version="v1.18.0"
+    com.redhat.component="openshift-pipelines-hub-ui-rhel9-container" \
+    cpe="cpe:/a:redhat:openshift_pipelines:1.18::el9" \
+    description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
+    io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
+    io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub ui" \
+    io.openshift.tags="tekton,openshift,tektoncd-hub,ui" \
+    maintainer="pipelines-extcomm@redhat.com" \
+    name="openshift-pipelines/pipelines-hub-ui-rhel9" \
+    summary="Red Hat OpenShift Pipelines tektoncd-hub ui" \
+    version="v1.18.0"
