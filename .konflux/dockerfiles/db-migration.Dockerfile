@@ -1,4 +1,4 @@
-ARG GO_BUILDER=brew.registry.redhat.io/rh-osbs/openshift-golang-builder:v1.24
+ARG GO_BUILDER=registry.access.redhat.com/ubi9/go-toolset:1.25
 ARG RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal:latest@sha256:ecd4751c45e076b4e1e8d37ac0b1b9c7271930c094d1bcc5e6a4d6954c6b2289 
 
 FROM $GO_BUILDER AS builder 
@@ -16,7 +16,7 @@ RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vend
     ./api/cmd/db
 
 FROM $RUNTIME
-ARG VERSION=hub-db-1.21.0
+ARG VERSION=1.21
 
 COPY --from=builder /tmp/hub-db-migration /ko-app/hub-db-migration
 COPY head ${KO_DATA_PATH}/HEAD
@@ -24,16 +24,16 @@ COPY head ${KO_DATA_PATH}/HEAD
 EXPOSE 8000
 
 LABEL \
-      com.redhat.component="openshift-pipelines-hub-db-migration-rhel9-container" \
-      cpe="cpe:/a:redhat:openshift_pipelines:1.21::el9" \
-      description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
-      io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
-      io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
-      io.openshift.tags="tekton,openshift,tektoncd-hub,db-migration" \
-      maintainer="pipelines-extcomm@redhat.com" \
-      name="openshift-pipelines/pipelines-hub-db-migration-rhel9" \
-      summary="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
-      version="v1.21.1"
+    com.redhat.component="openshift-pipelines-hub-db-migration-rhel9-container" \
+    cpe="cpe:/a:redhat:openshift_pipelines:1.21::el9" \
+    description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
+    io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
+    io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
+    io.openshift.tags="tekton,openshift,tektoncd-hub,db-migration" \
+    maintainer="pipelines-extcomm@redhat.com" \
+    name="openshift-pipelines/pipelines-hub-db-migration-rhel9" \
+    summary="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
+    version="v1.21.1"
 
 
 RUN groupadd -r -g 65532 nonroot && useradd --no-log-init -r -u 65532 -g nonroot nonroot

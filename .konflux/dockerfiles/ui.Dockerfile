@@ -26,7 +26,7 @@ ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
 COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/start.sh /usr/bin/
 COPY --from=builder $REMOTE_SOURCE/ui/image/nginx.conf "${NGINX_CONFIGURATION_PATH}"/server.conf
-ARG VERSION=hub-ui-1.21.0
+ARG VERSION=1.21
 
 USER root
 RUN fips-mode-setup --enable && \
@@ -63,13 +63,13 @@ COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/config-js.conf "${NGINX
 CMD /usr/bin/start.sh
 
 LABEL \
-      com.redhat.component="openshift-pipelines-hub-ui-rhel9-container" \
-      cpe="cpe:/a:redhat:openshift_pipelines:1.21::el9" \
-      description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-      io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-      io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-      io.openshift.tags="tekton,openshift,tektoncd-hub,ui" \
-      maintainer="pipelines-extcomm@redhat.com" \
-      name="openshift-pipelines/pipelines-hub-ui-rhel9" \
-      summary="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-      version="v1.21.1"
+    com.redhat.component="openshift-pipelines-hub-ui-rhel9-container" \
+    cpe="cpe:/a:redhat:openshift_pipelines:1.21::el9" \
+    description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
+    io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
+    io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub ui" \
+    io.openshift.tags="tekton,openshift,tektoncd-hub,ui" \
+    maintainer="pipelines-extcomm@redhat.com" \
+    name="openshift-pipelines/pipelines-hub-ui-rhel9" \
+    summary="Red Hat OpenShift Pipelines tektoncd-hub ui" \
+    version="v1.21.1"
