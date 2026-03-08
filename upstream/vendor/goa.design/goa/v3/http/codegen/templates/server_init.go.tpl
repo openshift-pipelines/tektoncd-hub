@@ -32,7 +32,9 @@ func {{ .ServerInit }}(
 		{{- if not .IsDir }}
 			{{- $prefix = dir $prefix }}
 		{{- end }}
-		{{ .ArgName }} = appendPrefix({{ .ArgName }}, "{{ $prefix }}")
+		{{- if ne $prefix "/" }}
+	{{ .ArgName }} = appendPrefix({{ .ArgName }}, "{{ $prefix }}")
+		{{- end }}
 	{{- end }}
 	return &{{ .ServerStruct }}{
 		Mounts: []*{{ .MountPointStruct }}{
