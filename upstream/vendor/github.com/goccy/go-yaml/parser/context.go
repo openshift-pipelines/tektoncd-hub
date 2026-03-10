@@ -120,7 +120,7 @@ func (c *context) next() bool {
 }
 
 func (c *context) insertNullToken(tk *Token) *Token {
-	nullToken := c.createImplicitNullToken(tk)
+	nullToken := c.createNullToken(tk)
 	c.insertToken(nullToken)
 	c.goNext()
 
@@ -128,7 +128,7 @@ func (c *context) insertNullToken(tk *Token) *Token {
 }
 
 func (c *context) addNullValueToken(tk *Token) *Token {
-	nullToken := c.createImplicitNullToken(tk)
+	nullToken := c.createNullToken(tk)
 	rawTk := nullToken.RawToken()
 
 	// add space for map or sequence value.
@@ -140,12 +140,10 @@ func (c *context) addNullValueToken(tk *Token) *Token {
 	return nullToken
 }
 
-func (c *context) createImplicitNullToken(base *Token) *Token {
+func (c *context) createNullToken(base *Token) *Token {
 	pos := *(base.RawToken().Position)
 	pos.Column++
-	tk := token.New("null", " null", &pos)
-	tk.Type = token.ImplicitNullType
-	return &Token{Token: tk}
+	return &Token{Token: token.New("null", " null", &pos)}
 }
 
 func (c *context) insertToken(tk *Token) {

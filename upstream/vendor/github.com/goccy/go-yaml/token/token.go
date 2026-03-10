@@ -102,10 +102,6 @@ const (
 	SpaceType
 	// NullType type for Null token
 	NullType
-	// ImplicitNullType type for implicit Null token.
-	// This is used when explicit keywords such as null or ~ are not specified.
-	// It is distinguished during encoding and output as an empty string.
-	ImplicitNullType
 	// InfinityType type for Infinity token
 	InfinityType
 	// NanType type for Nan token
@@ -191,8 +187,6 @@ func (t Type) String() string {
 		return "Float"
 	case NullType:
 		return "Null"
-	case ImplicitNullType:
-		return "ImplicitNull"
 	case InfinityType:
 		return "Infinity"
 	case NanType:

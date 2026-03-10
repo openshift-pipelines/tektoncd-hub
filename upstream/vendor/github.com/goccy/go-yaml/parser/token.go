@@ -709,7 +709,6 @@ func isScalarType(tk *Token) bool {
 		typ == token.LiteralType ||
 		typ == token.FoldedType ||
 		typ == token.NullType ||
-		typ == token.ImplicitNullType ||
 		typ == token.BoolType ||
 		typ == token.IntegerType ||
 		typ == token.BinaryIntegerType ||

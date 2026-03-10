@@ -5,13 +5,17 @@ TESTMOD := testdata/go_test.mod
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
+.PHONY: testmod
+	cp go.mod testdata/go_test.mod
+	go mod tidy -modfile=$(TESTMOD)
+
 .PHONY: test
-test:
+test: testmod
 	go test -v -race ./...
 	go test -v -race ./testdata -modfile=$(TESTMOD)
 
 .PHONY: simple-test
-simple-test:
+simple-test: testmod
 	go test -v ./...
 	go test -v ./testdata -modfile=$(TESTMOD)
 
@@ -20,7 +24,7 @@ fuzz:
 	go test -fuzz=Fuzz -fuzztime 60s
 
 .PHONY: cover
-cover:
+cover: testmod
 	go test -coverpkg=.,./ast,./lexer,./parser,./printer,./scanner,./token -coverprofile=cover.out -modfile=$(TESTMOD) ./... ./testdata
 
 .PHONY: cover-html
@@ -45,11 +49,11 @@ fmt: golangci-lint ## Ensure consistent code style
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
-GOLANGCI_VERSION := 2.1.2
+GOLANGCI_VERSION := 1.61.0
 
 .PHONY: golangci-lint
 .PHONY: $(GOLANGCI_LINT)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
-	@test -s $(LOCALBIN)/golangci-lint && $(LOCALBIN)/golangci-lint version --short | grep -q $(GOLANGCI_VERSION) || \
+	@test -s $(LOCALBIN)/golangci-lint && $(LOCALBIN)/golangci-lint version --format short | grep -q $(GOLANGCI_VERSION) || \
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(LOCALBIN) v$(GOLANGCI_VERSION)
