@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"unicode/utf8"
 
-	"github.com/goccy/go-yaml"
+	"gopkg.in/yaml.v3"
 )
 
 // Dumper is resposible for dumping fixtures from the database into a
@@ -103,9 +103,7 @@ func (d *Dumper) dumpTable(table string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
+	defer rows.Close()
 
 	columns, err := rows.Columns()
 	if err != nil {
@@ -129,10 +127,7 @@ func (d *Dumper) dumpTable(table string) error {
 		}
 		fixtures = append(fixtures, entryMap)
 	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	if err := rows.Close(); err != nil {
+	if err = rows.Err(); err != nil {
 		return err
 	}
 
@@ -141,21 +136,14 @@ func (d *Dumper) dumpTable(table string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = f.Close()
-	}()
+	defer f.Close()
 
 	data, err := yaml.Marshal(fixtures)
 	if err != nil {
 		return err
 	}
-	if _, err := f.Write(data); err != nil {
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return nil
+	_, err = f.Write(data)
+	return err
 }
 
 func convertValue(value interface{}) interface{} {
