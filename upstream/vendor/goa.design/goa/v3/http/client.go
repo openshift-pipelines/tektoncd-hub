@@ -81,7 +81,7 @@ func (dd *debugDoer) Do(req *http.Request) (*http.Response, error) {
 
 	respb, err := io.ReadAll(resp.Body)
 	if err != nil {
-		respb = fmt.Appendf(nil, "!!failed to read response: %s", err)
+		respb = []byte(fmt.Sprintf("!!failed to read response: %s", err))
 	}
 	resp.Body = io.NopCloser(bytes.NewBuffer(respb))
 

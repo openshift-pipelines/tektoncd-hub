@@ -107,8 +107,7 @@ func (mx *Mux) Use(middlewares ...func(http.Handler) http.Handler) {
 // Handle adds the route `pattern` that matches any http method to
 // execute the `handler` http.Handler.
 func (mx *Mux) Handle(pattern string, handler http.Handler) {
-	if i := strings.IndexAny(pattern, " \t"); i >= 0 {
-		method, rest := pattern[:i], strings.TrimLeft(pattern[i+1:], " \t")
+	if method, rest, found := strings.Cut(pattern, " "); found {
 		mx.Method(method, rest, handler)
 		return
 	}
@@ -119,7 +118,12 @@ func (mx *Mux) Handle(pattern string, handler http.Handler) {
 // HandleFunc adds the route `pattern` that matches any http method to
 // execute the `handlerFn` http.HandlerFunc.
 func (mx *Mux) HandleFunc(pattern string, handlerFn http.HandlerFunc) {
-	mx.Handle(pattern, handlerFn)
+	if method, rest, found := strings.Cut(pattern, " "); found {
+		mx.Method(method, rest, handlerFn)
+		return
+	}
+
+	mx.handle(mALL, pattern, handlerFn)
 }
 
 // Method adds the route `pattern` that matches `method` http method to
@@ -469,9 +473,6 @@ func (mx *Mux) routeHTTP(w http.ResponseWriter, r *http.Request) {
 	if _, _, h := mx.tree.FindRoute(rctx, method, routePath); h != nil {
 		if supportsPathValue {
 			setPathValue(rctx, r)
-		}
-		if supportsPattern {
-			setPattern(rctx, r)
 		}
 
 		h.ServeHTTP(w, r)

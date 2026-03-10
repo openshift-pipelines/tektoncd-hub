@@ -7,9 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/go-testfixtures/testfixtures/v3/shared"
+	"golang.org/x/sync/errgroup"
 )
 
 type postgreSQL struct {
@@ -75,8 +74,8 @@ func (h *postgreSQL) init(db *sql.DB) error {
 	return nil
 }
 
-func (*postgreSQL) paramType() ParamType {
-	return ParamTypeDollar
+func (*postgreSQL) paramType() int {
+	return paramTypeDollar
 }
 
 func (*postgreSQL) databaseName(q shared.Queryable) (string, error) {
