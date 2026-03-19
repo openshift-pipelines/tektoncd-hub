@@ -1,14 +1,33 @@
 package testfixtures
 
 import (
+	"cmp"
 	"database/sql"
 	"fmt"
+	"strings"
+
+	"github.com/go-testfixtures/testfixtures/v3/shared"
 )
 
+type ParamType string
+
+func (p ParamType) String() string {
+	return string(p)
+}
+
+func (p ParamType) Valid() error {
+	switch p {
+	case ParamTypeDollar, ParamTypeQuestion, ParamTypeAtSign:
+		return nil
+	default:
+		return fmt.Errorf("testfixtures: param type %s is not supported", p)
+	}
+}
+
 const (
-	paramTypeDollar = iota + 1
-	paramTypeQuestion
-	paramTypeAtSign
+	ParamTypeDollar   ParamType = "$"
+	ParamTypeQuestion ParamType = "?"
+	ParamTypeAtSign   ParamType = "@"
 )
 
 type loadFunction func(tx *sql.Tx) error
@@ -16,42 +35,45 @@ type loadFunction func(tx *sql.Tx) error
 type helper interface {
 	init(*sql.DB) error
 	disableReferentialIntegrity(*sql.DB, loadFunction) error
-	paramType() int
-	databaseName(queryable) (string, error)
-	tableNames(queryable) ([]string, error)
-	isTableModified(queryable, string) (bool, error)
-	afterLoad(queryable) error
+	paramType() ParamType
+	getDefaultParamType() ParamType
+	setCustomParamType(ParamType)
+	databaseName(shared.Queryable) (string, error)
+	tableNames(shared.Queryable) ([]string, error)
+	isTableModified(shared.Queryable, string) (bool, error)
+	computeTablesChecksum(shared.Queryable) error
 	quoteKeyword(string) string
 	whileInsertOnTable(*sql.Tx, string, func() error) error
 	cleanTableQuery(string) string
-}
-
-type queryable interface {
-	Exec(string, ...interface{}) (sql.Result, error)
-	Query(string, ...interface{}) (*sql.Rows, error)
-	QueryRow(string, ...interface{}) *sql.Row
-}
-
-// batchSplitter is an interface with method which returns byte slice for
-// splitting SQL batches. This need to split sql statements and run its
-// separately.
-//
-// For Microsoft SQL Server batch splitter is "GO". For details see
-// https://docs.microsoft.com/en-us/sql/t-sql/language-elements/sql-server-utilities-statements-go
-type batchSplitter interface { //nolint
-	splitter() []byte
+	buildInsertSQL(q shared.Queryable, tableName string, columns, values []string) (string, error)
 }
 
 var (
 	_ helper = &clickhouse{}
+	_ helper = &spanner{}
 	_ helper = &mySQL{}
 	_ helper = &postgreSQL{}
 	_ helper = &sqlite{}
 	_ helper = &sqlserver{}
 )
 
-type baseHelper struct{}
+type baseHelper struct {
+	customParamType ParamType
+}
 
+func (b *baseHelper) setCustomParamType(paramType ParamType) {
+	b.customParamType = paramType
+}
+
+func (b *baseHelper) paramType() ParamType {
+	return cmp.Or(b.customParamType, b.getDefaultParamType())
+}
+
+func (b *baseHelper) getDefaultParamType() ParamType {
+	return ParamTypeDollar
+}
+
+// shared methods
 func (baseHelper) init(_ *sql.DB) error {
 	return nil
 }
@@ -64,14 +86,23 @@ func (baseHelper) whileInsertOnTable(_ *sql.Tx, _ string, fn func() error) error
 	return fn()
 }
 
-func (baseHelper) isTableModified(_ queryable, _ string) (bool, error) {
+func (baseHelper) isTableModified(_ shared.Queryable, _ string) (bool, error) {
 	return true, nil
 }
 
-func (baseHelper) afterLoad(_ queryable) error {
+func (baseHelper) computeTablesChecksum(_ shared.Queryable) error {
 	return nil
 }
 
 func (baseHelper) cleanTableQuery(tableName string) string {
 	return fmt.Sprintf("DELETE FROM %s", tableName)
+}
+
+func (h baseHelper) buildInsertSQL(_ shared.Queryable, tableName string, columns, values []string) (string, error) {
+	return fmt.Sprintf(
+		"INSERT INTO %s (%s) VALUES (%s)",
+		tableName,
+		strings.Join(columns, ", "),
+		strings.Join(values, ", "),
+	), nil
 }

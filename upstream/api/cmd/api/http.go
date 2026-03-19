@@ -36,10 +36,10 @@ import (
 	resourcesvr "github.com/tektoncd/hub/api/gen/http/resource/server"
 	statussvr "github.com/tektoncd/hub/api/gen/http/status/server"
 	swaggersvr "github.com/tektoncd/hub/api/gen/http/swagger/server"
-	"github.com/tektoncd/hub/api/gen/log"
 	rating "github.com/tektoncd/hub/api/gen/rating"
 	resource "github.com/tektoncd/hub/api/gen/resource"
 	status "github.com/tektoncd/hub/api/gen/status"
+	"github.com/tektoncd/hub/api/pkg/app"
 	v1catalog "github.com/tektoncd/hub/api/v1/gen/catalog"
 	v1catalogsvr "github.com/tektoncd/hub/api/v1/gen/http/catalog/server"
 	v1resourcesvr "github.com/tektoncd/hub/api/v1/gen/http/resource/server"
@@ -59,7 +59,7 @@ func handleHTTPServer(
 	resourceEndpoints *resource.Endpoints,
 	v1resourceEndpoints *v1resource.Endpoints,
 	statusEndpoints *status.Endpoints,
-	wg *sync.WaitGroup, errc chan error, logger *log.Logger, debug bool) {
+	wg *sync.WaitGroup, errc chan error, logger *app.Logger, debug bool) {
 
 	// Setup goa log adapter.
 	var (
@@ -152,7 +152,7 @@ func handleHTTPServer(
 
 	// Start HTTP server using default configuration, change the code to
 	// configure the server as required by your service.
-	srv := &http.Server{Addr: u.Host, Handler: handler}
+	srv := &http.Server{Addr: u.Host, Handler: handler, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 1 * time.Minute, ReadHeaderTimeout: 10 * time.Second}
 	for _, m := range adminServer.Mounts {
 		logger.Infof("HTTP %q mounted on %s %s", m.Method, m.Verb, m.Pattern)
 	}
@@ -208,7 +208,7 @@ func handleHTTPServer(
 // errorHandler returns a function that writes and logs the given error.
 // The function also writes and logs the error unique ID so that it's possible
 // to correlate.
-func errorHandler(logger *log.Logger) func(context.Context, http.ResponseWriter, error) {
+func errorHandler(logger *app.Logger) func(context.Context, http.ResponseWriter, error) {
 	return func(ctx context.Context, w http.ResponseWriter, err error) {
 		id := ctx.Value(middleware.RequestIDKey).(string)
 		_, _ = w.Write([]byte("[" + id + "] encoding: " + err.Error()))
