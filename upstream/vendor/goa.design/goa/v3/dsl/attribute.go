@@ -112,26 +112,28 @@ import (
 //	})
 func Attribute(name string, args ...any) {
 	var parent *expr.AttributeExpr
-	switch def := eval.Current().(type) {
-	case *expr.AttributeExpr:
-		parent = def
-	case expr.CompositeExpr:
-		parent = def.Attribute()
-	default:
-		eval.IncompatibleDSL()
-		return
-	}
-	if parent == nil {
-		eval.ReportError("invalid syntax, attribute %#v has no parent", name)
-		return
-	}
-	if parent.Type == nil {
-		parent.Type = &expr.Object{}
-	}
-	if _, ok := parent.Type.(*expr.Object); !ok {
-		if _, ok := parent.Type.(*expr.Union); !ok {
-			eval.ReportError("can't define child attribute %#v on attribute of type %s %T", name, parent.Type.Name(), parent.Type)
+	{
+		switch def := eval.Current().(type) {
+		case *expr.AttributeExpr:
+			parent = def
+		case expr.CompositeExpr:
+			parent = def.Attribute()
+		default:
+			eval.IncompatibleDSL()
 			return
+		}
+		if parent == nil {
+			eval.ReportError("invalid syntax, attribute %#v has no parent", name)
+			return
+		}
+		if parent.Type == nil {
+			parent.Type = &expr.Object{}
+		}
+		if _, ok := parent.Type.(*expr.Object); !ok {
+			if _, ok := parent.Type.(*expr.Union); !ok {
+				eval.ReportError("can't define child attribute %#v on attribute of type %s %T", name, parent.Type.Name(), parent.Type)
+				return
+			}
 		}
 	}
 
@@ -219,23 +221,18 @@ func Field(tag any, name string, args ...any) {
 //	    })
 //	})
 func OneOf(name string, args ...any) {
-	if len(args) == 0 {
-		eval.TooFewArgError()
-		return
-	}
 	if len(args) > 2 {
-		eval.TooManyArgError()
-		return
+		eval.ReportError("OneOf: wrong number of arguments")
 	}
 	fn, ok := args[len(args)-1].(func())
 	if !ok {
-		eval.InvalidArgError("function", args[len(args)-1])
+		eval.ReportError("OneOf: last argument must be a function")
 	}
 	var desc string
 	if len(args) > 1 {
 		desc, ok = args[0].(string)
 		if !ok {
-			eval.InvalidArgError("string", args[0])
+			eval.ReportError("OneOf: description must be a string")
 		}
 	}
 	Attribute(name, &expr.Union{TypeName: name}, desc, fn)
@@ -300,11 +297,11 @@ func Default(def any) {
 //	})
 func Example(args ...any) {
 	if len(args) == 0 {
-		eval.TooFewArgError()
+		eval.ReportError("not enough arguments")
 		return
 	}
 	if len(args) > 2 {
-		eval.TooManyArgError()
+		eval.ReportError("too many arguments")
 		return
 	}
 	var (
@@ -318,7 +315,7 @@ func Example(args ...any) {
 		var ok bool
 		summary, ok = args[0].(string)
 		if !ok {
-			eval.InvalidArgError("summary (string)", args[0])
+			eval.InvalidArgError("summary (string)", summary)
 			return
 		}
 		arg = args[1]
@@ -336,6 +333,11 @@ func Example(args ...any) {
 	}
 	if ex.Value == nil {
 		eval.ReportError("example value is missing")
+		return
+	}
+	if a.Type != nil && !a.Type.IsCompatible(ex.Value) {
+		eval.ReportError("example value %#v is incompatible with attribute of type %s",
+			ex.Value, a.Type.Name())
 		return
 	}
 	a.UserExamples = append(a.UserExamples, ex)
@@ -398,7 +400,7 @@ func parseAttributeArgs(baseAttr *expr.AttributeExpr, args ...any) (expr.DataTyp
 		parseDescription("string", 1)
 		parseDSL(2, success, func() { eval.InvalidArgError("func()", args[2]) })
 	default:
-		eval.TooManyArgError()
+		eval.ReportError("too many arguments in call to Attribute")
 	}
 
 	return dataType, description, fn

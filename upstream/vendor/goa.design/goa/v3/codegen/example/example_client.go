@@ -24,7 +24,7 @@ func CLIFiles(genpkg string, root *expr.RootExpr) []*codegen.File {
 // exampleCLIMain returns an example client tool main implementation for the
 // given server expression.
 func exampleCLIMain(_ string, root *expr.RootExpr, svr *expr.ServerExpr) *codegen.File {
-	svrdata := Servers.Get(svr, root)
+	svrdata := Servers.Get(svr)
 
 	path := filepath.Join("cmd", svrdata.Dir+"-cli", "main.go")
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -33,13 +33,10 @@ func exampleCLIMain(_ string, root *expr.RootExpr, svr *expr.ServerExpr) *codege
 	specs := []*codegen.ImportSpec{
 		{Path: "context"},
 		{Path: "encoding/json"},
-		{Path: "errors"},
 		{Path: "flag"},
 		{Path: "fmt"},
 		{Path: "net/url"},
 		{Path: "os"},
-		{Path: "sort"},
-		{Path: "slices"},
 		{Path: "strings"},
 		codegen.GoaImport(""),
 	}
@@ -47,18 +44,16 @@ func exampleCLIMain(_ string, root *expr.RootExpr, svr *expr.ServerExpr) *codege
 		codegen.Header("", "main", specs),
 		{
 			Name:   "cli-main-start",
-			Source: exampleTemplates.Read(clientStartT),
+			Source: readTemplate("client_start"),
 			Data: map[string]any{
-				"Server":     svrdata,
-				"HasJSONRPC": hasJSONRPC(root, svr),
-				"HasHTTP":    hasHTTP(root, svr),
+				"Server": svrdata,
 			},
 			FuncMap: map[string]any{
 				"join": strings.Join,
 			},
 		}, {
 			Name:   "cli-main-var-init",
-			Source: exampleTemplates.Read(clientVarInitT),
+			Source: readTemplate("client_var_init"),
 			Data: map[string]any{
 				"Server": svrdata,
 			},
@@ -67,12 +62,9 @@ func exampleCLIMain(_ string, root *expr.RootExpr, svr *expr.ServerExpr) *codege
 			},
 		}, {
 			Name:   "cli-main-endpoint-init",
-			Source: exampleTemplates.Read(clientEndpointInitT),
+			Source: readTemplate("client_endpoint_init"),
 			Data: map[string]any{
-				"Server":     svrdata,
-				"Root":       root,
-				"HasJSONRPC": hasJSONRPC(root, svr),
-				"HasHTTP":    hasHTTP(root, svr),
+				"Server": svrdata,
 			},
 			FuncMap: map[string]any{
 				"join":    strings.Join,
@@ -80,15 +72,13 @@ func exampleCLIMain(_ string, root *expr.RootExpr, svr *expr.ServerExpr) *codege
 			},
 		}, {
 			Name:   "cli-main-end",
-			Source: exampleTemplates.Read(clientEndT),
+			Source: readTemplate("client_end"),
 		}, {
 			Name:   "cli-main-usage",
-			Source: exampleTemplates.Read(clientUsageT),
+			Source: readTemplate("client_usage"),
 			Data: map[string]any{
-				"APIName":    root.API.Name,
-				"Server":     svrdata,
-				"HasJSONRPC": hasJSONRPC(root, svr),
-				"HasHTTP":    hasHTTP(root, svr),
+				"APIName": root.API.Name,
+				"Server":  svrdata,
 			},
 			FuncMap: map[string]any{
 				"toUpper": strings.ToUpper,
@@ -97,24 +87,4 @@ func exampleCLIMain(_ string, root *expr.RootExpr, svr *expr.ServerExpr) *codege
 		},
 	}
 	return &codegen.File{Path: path, SectionTemplates: sections, SkipExist: true}
-}
-
-// hasJSONRPC returns true if the server expression has a JSON-RPC server.
-func hasJSONRPC(root *expr.RootExpr, svr *expr.ServerExpr) bool {
-	for _, s := range svr.Services {
-		if root.API.JSONRPC.Service(s) != nil {
-			return true
-		}
-	}
-	return false
-}
-
-// hasHTTP returns true if the server expression has an HTTP server.
-func hasHTTP(root *expr.RootExpr, svr *expr.ServerExpr) bool {
-	for _, s := range svr.Services {
-		if root.API.HTTP.Service(s) != nil {
-			return true
-		}
-	}
-	return false
 }

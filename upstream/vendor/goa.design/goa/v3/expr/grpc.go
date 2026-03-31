@@ -37,10 +37,3 @@ func (g *GRPCExpr) ServiceFor(s *ServiceExpr) *GRPCServiceExpr {
 func (*GRPCExpr) EvalName() string {
 	return "API GRPC"
 }
-
-// Prepare initializes the error responses.
-func (g *GRPCExpr) Prepare() {
-	for _, er := range g.Errors {
-		er.Response.Prepare()
-	}
-}

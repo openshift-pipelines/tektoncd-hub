@@ -187,14 +187,13 @@ func GenerateServiceDefinition(api *expr.APIExpr, res *expr.HTTPServiceExpr) {
 				} else {
 					identifier = ""
 				}
-				switch {
-				case targetSchema == nil:
+				if targetSchema == nil {
 					targetSchema = TypeSchemaWithPrefix(api, mt, a.Name())
-				case targetSchema.AnyOf == nil:
+				} else if targetSchema.AnyOf == nil {
 					firstSchema := targetSchema
 					targetSchema = NewSchema()
 					targetSchema.AnyOf = []*Schema{firstSchema, TypeSchemaWithPrefix(api, mt, a.Name())}
-				default:
+				} else {
 					targetSchema.AnyOf = append(targetSchema.AnyOf, TypeSchemaWithPrefix(api, mt, a.Name()))
 				}
 			}
@@ -231,7 +230,7 @@ func ResultTypeRef(api *expr.APIExpr, mt *expr.ResultTypeExpr, view string) stri
 
 // ResultTypeRefWithPrefix produces the JSON reference to the media type definition with
 // the given view and adds the provided prefix to the type name
-func ResultTypeRefWithPrefix(api *expr.APIExpr, mt *expr.ResultTypeExpr, view, prefix string) string {
+func ResultTypeRefWithPrefix(api *expr.APIExpr, mt *expr.ResultTypeExpr, view string, prefix string) string {
 	projected, err := expr.Project(mt, view)
 	if err != nil {
 		panic(fmt.Sprintf("failed to project media type %#v: %s", mt.Identifier, err)) // bug
@@ -248,7 +247,7 @@ func ResultTypeRefWithPrefix(api *expr.APIExpr, mt *expr.ResultTypeExpr, view, p
 		if metaName != "" {
 			projected.TypeName = metaName
 		}
-		GenerateResultTypeDefinition(api, projected, expr.DefaultView)
+		GenerateResultTypeDefinition(api, projected, "default")
 	}
 	return fmt.Sprintf("#/definitions/%s", projected.TypeName)
 }
@@ -319,9 +318,8 @@ func TypeSchemaWithPrefix(api *expr.APIExpr, t expr.DataType, prefix string) *Sc
 		s.Type = Type(actual.Name())
 		switch actual.Kind() {
 		case expr.AnyKind:
-			// A schema without a type matches any data type.
-			// See https://swagger.io/docs/specification/data-models/data-types/#any.
-			s.Type = Type("")
+			s.Type = Type("string")
+			s.Format = "binary"
 		case expr.IntKind, expr.Int64Kind,
 			expr.UIntKind, expr.UInt64Kind:
 			// Use int64 format for IntKind and UIntKind because the OpenAPI
@@ -487,9 +485,6 @@ func buildAttributeSchema(api *expr.APIExpr, s *Schema, at *expr.AttributeExpr) 
 	s.Description = at.Description
 	s.Example = at.Example(api.ExampleGenerator)
 	s.Extensions = ExtensionsFromExpr(at.Meta)
-	if ap := AdditionalPropertiesFromExpr(at.Meta); ap != nil {
-		s.AdditionalProperties = ap
-	}
 	initAttributeValidation(s, at)
 
 	return s
@@ -596,13 +591,4 @@ func MustGenerate(meta expr.MetaExpr) bool {
 		return false
 	}
 	return true
-}
-
-// AdditionalPropertiesFromExpr extracts the OpenAPI additionalProperties.
-func AdditionalPropertiesFromExpr(meta expr.MetaExpr) any {
-	m, ok := meta.Last("openapi:additionalProperties")
-	if ok && m == "false" {
-		return false
-	}
-	return nil
 }

@@ -61,14 +61,13 @@ func (e *HTTPErrorExpr) Validate() *eval.ValidationErrors {
 		case IsObject(ee.Type):
 			for _, h := range *AsObject(e.Response.Headers.Type) {
 				att := ee.Find(h.Name)
-				switch {
-				case att == nil:
+				if att == nil {
 					verr.Add(e.Response, "header %q has no equivalent attribute in error type, use notation 'attribute_name:header_name' to identify corresponding error type attribute.", h.Name)
-				case IsArray(att.Type):
+				} else if IsArray(att.Type) {
 					if !IsPrimitive(AsArray(att.Type).ElemType.Type) {
 						verr.Add(e.Response, "attribute %q used in HTTP headers must be a primitive type or an array of primitive types.", h.Name)
 					}
-				case !IsPrimitive(att.Type):
+				} else if !IsPrimitive(att.Type) {
 					verr.Add(e.Response, "attribute %q used in HTTP headers must be a primitive type or an array of primitive types.", h.Name)
 				}
 			}

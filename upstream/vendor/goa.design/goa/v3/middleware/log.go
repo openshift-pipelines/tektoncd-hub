@@ -41,6 +41,6 @@ func (a *adapter) Log(keyvals ...any) error {
 		vals[i/2] = v
 		fm.WriteString(fmt.Sprintf(" %s=%%+v", k))
 	}
-	a.Printf(strings.TrimSpace(fm.String()), vals...)
+	a.Logger.Printf(strings.TrimSpace(fm.String()), vals...)
 	return nil
 }

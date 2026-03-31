@@ -1,8 +1,6 @@
 package openapiv3
 
-import (
-	"goa.design/goa/v3/expr"
-)
+import "goa.design/goa/v3/expr"
 
 type (
 	// exampler is the interface used to initialize the example of an

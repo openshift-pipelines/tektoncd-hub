@@ -8,16 +8,18 @@ import (
 )
 
 // ServerTypeFiles returns the HTTP transport type files.
-func ServerTypeFiles(genpkg string, data *ServicesData) []*codegen.File {
-	fw := make([]*codegen.File, len(data.Expressions.Services))
-	for i, r := range data.Expressions.Services {
-		fw[i] = serverType(genpkg, r, data)
+func ServerTypeFiles(genpkg string, root *expr.RootExpr) []*codegen.File {
+	fw := make([]*codegen.File, len(root.API.HTTP.Services))
+	seen := make(map[string]struct{})
+	for i, r := range root.API.HTTP.Services {
+		fw[i] = serverType(genpkg, r, seen)
 	}
 	return fw
 }
 
 // serverType return the file containing the type definitions used by the HTTP
-// transport for the given service server.
+// transport for the given service server. seen keeps track of the names of the
+// types that have already been generated to prevent duplicate code generation.
 //
 // Below are the rules governing whether values are pointers or not. Note that
 // the rules only applies to values that hold primitive types, values that hold
@@ -39,10 +41,10 @@ func ServerTypeFiles(genpkg string, data *ServicesData) []*codegen.File {
 //
 //   - Response body fields (if the body is a struct) and header variables hold
 //     pointers when not required and have no default value.
-func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData) *codegen.File {
+func serverType(genpkg string, svc *expr.HTTPServiceExpr, _ map[string]struct{}) *codegen.File {
 	var (
 		path    string
-		data    = services.Get(svc.Name())
+		data    = HTTPServices.Get(svc.Name())
 		svcName = data.Service.PathName
 	)
 	path = filepath.Join(codegen.Gendir, "http", svcName, "server", "types.go")
@@ -53,6 +55,7 @@ func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData
 		codegen.GoaImport(""),
 		{Path: genpkg + "/" + svcName + "/" + "views", Name: data.Service.ViewsPkg},
 	}
+	imports = append(imports, data.Service.UserTypeImports...)
 	header := codegen.Header(svc.Name()+" HTTP server types", "server", imports)
 
 	var (
@@ -69,7 +72,7 @@ func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData
 			if data.Def != "" {
 				sections = append(sections, &codegen.SectionTemplate{
 					Name:   "request-body-type-decl",
-					Source: httpTemplates.Read(typeDeclT),
+					Source: readTemplate("type_decl"),
 					Data:   data,
 				})
 			}
@@ -77,12 +80,12 @@ func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData
 				validatedTypes = append(validatedTypes, data)
 			}
 		}
-		if adata.ServerWebSocket != nil && !adata.Method.IsJSONRPC {
+		if adata.ServerWebSocket != nil {
 			if data := adata.ServerWebSocket.Payload; data != nil {
 				if data.Def != "" {
 					sections = append(sections, &codegen.SectionTemplate{
 						Name:   "request-stream-payload-type-decl",
-						Source: httpTemplates.Read(typeDeclT),
+						Source: readTemplate("type_decl"),
 						Data:   data,
 					})
 				}
@@ -102,7 +105,7 @@ func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData
 					if tdata.Def != "" {
 						sections = append(sections, &codegen.SectionTemplate{
 							Name:   "response-server-body",
-							Source: httpTemplates.Read(typeDeclT),
+							Source: readTemplate("type_decl"),
 							Data:   tdata,
 						})
 					}
@@ -123,26 +126,19 @@ func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData
 		adata := data.Endpoint(a.Name())
 		for _, gerr := range adata.Errors {
 			for _, herr := range gerr.Errors {
-				for _, tdata := range herr.Response.ServerBody {
-					// Check if this error type has already been generated
-					if generated, ok := data.ServerTypeNames[tdata.Name]; ok && generated {
-						continue
-					}
-
-					if tdata.Def != "" {
+				for _, data := range herr.Response.ServerBody {
+					if data.Def != "" {
 						sections = append(sections, &codegen.SectionTemplate{
 							Name:   "error-body-type-decl",
-							Source: httpTemplates.Read(typeDeclT),
-							Data:   tdata,
+							Source: readTemplate("type_decl"),
+							Data:   data,
 						})
-						// Mark this type as generated
-						data.ServerTypeNames[tdata.Name] = true
 					}
-					if tdata.Init != nil {
-						initData = append(initData, tdata.Init)
+					if data.Init != nil {
+						initData = append(initData, data.Init)
 					}
-					if tdata.ValidateDef != "" {
-						validatedTypes = append(validatedTypes, tdata)
+					if data.ValidateDef != "" {
+						validatedTypes = append(validatedTypes, data)
 					}
 				}
 			}
@@ -154,7 +150,7 @@ func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData
 		if tdata.Def != "" {
 			sections = append(sections, &codegen.SectionTemplate{
 				Name:   "server-body-attributes",
-				Source: httpTemplates.Read(typeDeclT),
+				Source: readTemplate("type_decl"),
 				Data:   tdata,
 			})
 		}
@@ -168,7 +164,7 @@ func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData
 	for _, init := range initData {
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "server-body-init",
-			Source: httpTemplates.Read(serverBodyInitT),
+			Source: readTemplate("server_body_init"),
 			Data:   init,
 		})
 	}
@@ -178,16 +174,16 @@ func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData
 		if init := adata.Payload.Request.PayloadInit; init != nil {
 			sections = append(sections, &codegen.SectionTemplate{
 				Name:    "server-payload-init",
-				Source:  httpTemplates.Read(serverTypeInitT),
+				Source:  readTemplate("server_type_init"),
 				Data:    init,
 				FuncMap: map[string]any{"fieldCode": fieldCode},
 			})
 		}
-		if IsWebSocketEndpoint(adata) && adata.ServerWebSocket.Payload != nil {
+		if isWebSocketEndpoint(adata) && adata.ServerWebSocket.Payload != nil {
 			if init := adata.ServerWebSocket.Payload.Init; init != nil {
 				sections = append(sections, &codegen.SectionTemplate{
 					Name:    "server-payload-init",
-					Source:  httpTemplates.Read(serverTypeInitT),
+					Source:  readTemplate("server_type_init"),
 					Data:    init,
 					FuncMap: map[string]any{"fieldCode": fieldCode},
 				})
@@ -199,7 +195,7 @@ func serverType(genpkg string, svc *expr.HTTPServiceExpr, services *ServicesData
 	for _, data := range validatedTypes {
 		sections = append(sections, &codegen.SectionTemplate{
 			Name:   "server-validate",
-			Source: httpTemplates.Read(validateT),
+			Source: readTemplate("validate"),
 			Data:   data,
 		})
 	}
