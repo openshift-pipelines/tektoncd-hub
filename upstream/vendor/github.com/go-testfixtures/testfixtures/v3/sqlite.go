@@ -3,19 +3,17 @@ package testfixtures
 import (
 	"database/sql"
 	"path/filepath"
-
-	"github.com/go-testfixtures/testfixtures/v3/shared"
 )
 
 type sqlite struct {
 	baseHelper
 }
 
-func (*sqlite) paramType() ParamType {
-	return ParamTypeQuestion
+func (*sqlite) paramType() int {
+	return paramTypeQuestion
 }
 
-func (*sqlite) databaseName(q shared.Queryable) (string, error) {
+func (*sqlite) databaseName(q queryable) (string, error) {
 	var seq int
 	var main, dbName string
 	err := q.QueryRow("PRAGMA database_list").Scan(&seq, &main, &dbName)
@@ -26,7 +24,7 @@ func (*sqlite) databaseName(q shared.Queryable) (string, error) {
 	return dbName, nil
 }
 
-func (*sqlite) tableNames(q shared.Queryable) ([]string, error) {
+func (*sqlite) tableNames(q queryable) ([]string, error) {
 	query := `
 		SELECT name
 		FROM sqlite_master
@@ -36,9 +34,7 @@ func (*sqlite) tableNames(q shared.Queryable) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = rows.Close()
-	}()
+	defer rows.Close()
 
 	var tables []string
 	for rows.Next() {

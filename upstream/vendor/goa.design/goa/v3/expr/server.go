@@ -1,11 +1,9 @@
 package expr
 
 import (
-	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 
@@ -59,10 +57,7 @@ func (s *ServerExpr) EvalName() string { return "Server " + s.Name }
 func (s *ServerExpr) Validate() error {
 	verr := new(eval.ValidationErrors)
 	for _, h := range s.Hosts {
-		var verrs *eval.ValidationErrors
-		if errors.As(h.Validate(), &verrs) {
-			verr.Merge(verrs)
-		}
+		verr.Merge(h.Validate().(*eval.ValidationErrors))
 	}
 	for _, svc := range s.Services {
 		if Root.Service(svc) == nil {
@@ -89,7 +84,7 @@ func (s *ServerExpr) Finalize() {
 		}}
 	}
 	for _, svc := range s.Services {
-		hasHTTP := Root.API.HTTP.Service(svc) != nil || Root.API.JSONRPC.Service(svc) != nil
+		hasHTTP := Root.API.HTTP.Service(svc) != nil
 		hasGRPC := Root.API.GRPC.Service(svc) != nil
 		for _, h := range s.Hosts {
 			if hasHTTP && !h.HasHTTPScheme() {
@@ -209,8 +204,10 @@ func (h *HostExpr) Schemes() []string {
 // expression define "http" or "https" scheme.
 func (h *HostExpr) HasHTTPScheme() bool {
 	for _, s := range []string{"http", "https"} {
-		if slices.Contains(h.Schemes(), s) {
-			return true
+		for _, sch := range h.Schemes() {
+			if s == sch {
+				return true
+			}
 		}
 	}
 	return false
@@ -220,8 +217,10 @@ func (h *HostExpr) HasHTTPScheme() bool {
 // expression define "grpc" or "grpcs" scheme.
 func (h *HostExpr) HasGRPCScheme() bool {
 	for _, s := range []string{"grpc", "grpcs"} {
-		if slices.Contains(h.Schemes(), s) {
-			return true
+		for _, sch := range h.Schemes() {
+			if s == sch {
+				return true
+			}
 		}
 	}
 	return false
@@ -231,7 +230,13 @@ func (h *HostExpr) HasGRPCScheme() bool {
 // their default value if present or the first item in their enum. It returns
 // an error if the given URI expression is not found in the host URIs.
 func (h *HostExpr) URIString(u URIExpr) (string, error) {
-	found := slices.Contains(h.URIs, u)
+	found := false
+	for _, ue := range h.URIs {
+		if ue == u {
+			found = true
+			break
+		}
+	}
 	if !found {
 		return "", fmt.Errorf("uri %s not found in host", string(u))
 	}

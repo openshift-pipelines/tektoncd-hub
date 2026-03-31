@@ -8,21 +8,12 @@ func {{ .MountServer }}(mux goahttp.Muxer, h *{{ .ServerStruct }}) {
 	{{ .MountHandler }}(mux, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "{{ .Redirect.URL }}", {{ .Redirect.StatusCode }})
 		}))
+	 	{{- else if .IsDir }}
+			{{- $filepath := addLeadingSlash (removeTrailingIndexHTML .FilePath) }}
+	{{ .MountHandler }}(mux, {{ range .RequestPaths }}{{if ne . $filepath }}goahttp.Replace("{{ . }}", "{{ $filepath }}", {{ end }}{{ end }}h.{{ .VarName }}){{ range .RequestPaths }}{{ if ne . $filepath }}){{ end}}{{ end }}
 		{{- else }}
-			{{- $mountHandler := .MountHandler }}
-			{{- $varName := .VarName }}
-			{{- $isDir := .IsDir }}
-			{{- range .RequestPaths }}
-				{{- $stripped := addLeadingSlash . }}
-				{{- if not $isDir }}
-					{{- $stripped = (dir $stripped) }}
-				{{- end }}
-				{{- if eq $stripped "/" }}
-	{{ $mountHandler }}(mux, h.{{ $varName }}) 
-				{{- else }}
-	{{ $mountHandler }}(mux, http.StripPrefix("{{ $stripped }}", h.{{ $varName }}))
-				{{- end }}
-			{{- end }}
+			{{- $filepath := addLeadingSlash (removeTrailingIndexHTML .FilePath) }}
+	{{ .MountHandler }}(mux, {{ range .RequestPaths }}{{if ne . $filepath }}goahttp.Replace("", "{{ $filepath }}", {{ end }}{{ end }}h.{{ .VarName }}){{ range .RequestPaths }}{{ if ne . $filepath }}){{ end}}{{ end }}
 		{{- end }}
 	{{- end }}
 }
