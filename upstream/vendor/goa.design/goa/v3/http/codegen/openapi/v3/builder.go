@@ -2,7 +2,6 @@ package openapiv3
 
 import (
 	"fmt"
-	"maps"
 	"regexp"
 	"sort"
 	"strconv"
@@ -40,7 +39,7 @@ func New(root *expr.RootExpr) *OpenAPI {
 	}
 
 	var (
-		bodies, types = buildBodyTypes(root.API, root.Types, root.ResultTypes)
+		bodies, types = buildBodyTypes(root.API)
 
 		info     = buildInfo(root.API)
 		comps    = buildComponents(root, types)
@@ -128,6 +127,7 @@ func buildPaths(h *expr.HTTPExpr, bodies map[string]map[string]*EndpointBodies, 
 
 		// endpoints
 		for _, e := range svc.HTTPEndpoints {
+
 			if !openapi.MustGenerate(e.Meta) || !openapi.MustGenerate(e.MethodExpr.Meta) {
 				continue
 			}
@@ -136,7 +136,7 @@ func buildPaths(h *expr.HTTPExpr, bodies map[string]map[string]*EndpointBodies, 
 					// Remove any wildcards that is defined in path as a workaround to
 					// https://github.com/OAI/OpenAPI-Specification/issues/291
 					key = expr.HTTPWildcardRegex.ReplaceAllString(key, "/{$1}")
-					operation := buildOperation(key, r, sbod[e.Name()], api.ExampleGenerator, api.Meta)
+					operation := buildOperation(key, r, sbod[e.Name()], api.ExampleGenerator)
 					path, ok := paths[key]
 					if !ok {
 						path = new(PathItem)
@@ -161,7 +161,9 @@ func buildPaths(h *expr.HTTPExpr, bodies map[string]map[string]*EndpointBodies, 
 					path.Extensions = openapi.ExtensionsFromExpr(r.Endpoint.Meta)
 					if len(exts) > 0 {
 						path.Extensions = make(map[string]any)
-						maps.Copy(path.Extensions, exts)
+						for k, v := range exts {
+							path.Extensions[k] = v
+						}
 					}
 				}
 			}
@@ -174,9 +176,6 @@ func buildPaths(h *expr.HTTPExpr, bodies map[string]map[string]*EndpointBodies, 
 			}
 
 			for _, key := range f.RequestPaths {
-				// Replace wildcards in the path to OpenAPI path parameter form
-				// e.g. "/ui/{*filepath}" -> "/ui/{filepath}"
-				key = expr.HTTPWildcardRegex.ReplaceAllString(key, "/{$1}")
 				operation := buildFileServerOperation(key, f, api)
 				path, ok := paths[key]
 				if !ok {
@@ -191,7 +190,7 @@ func buildPaths(h *expr.HTTPExpr, bodies map[string]map[string]*EndpointBodies, 
 }
 
 // buildOperation builds the OpenAPI Operation object for the given path.
-func buildOperation(key string, r *expr.RouteExpr, bodies *EndpointBodies, rand *expr.ExampleGenerator, meta expr.MetaExpr) *Operation {
+func buildOperation(key string, r *expr.RouteExpr, bodies *EndpointBodies, rand *expr.ExampleGenerator) *Operation {
 	e := r.Endpoint
 	m := e.MethodExpr
 	svc := e.Service
@@ -210,11 +209,13 @@ func buildOperation(key string, r *expr.RouteExpr, bodies *EndpointBodies, rand 
 		}
 	}
 
-	summary = fmt.Sprintf("%s %s", e.Name(), svc.Name())
-	setSummary(meta)
-	setSummary(svc.ServiceExpr.Meta)
-	setSummary(e.Meta)
-	setSummary(m.Meta)
+	{
+		summary = fmt.Sprintf("%s %s", e.Name(), svc.Name())
+		setSummary(expr.Root.API.Meta)
+		setSummary(svc.ServiceExpr.Meta)
+		setSummary(r.Endpoint.Meta)
+		setSummary(m.Meta)
+	}
 
 	// OpenAPI operationId
 	var operationIDFormat string
@@ -226,11 +227,13 @@ func buildOperation(key string, r *expr.RouteExpr, bodies *EndpointBodies, rand 
 		}
 	}
 
-	operationIDFormat = defaultOperationIDFormat
-	setOperationIDFormat(meta)
-	setOperationIDFormat(m.Service.Meta)
-	setOperationIDFormat(e.Meta)
-	setOperationIDFormat(m.Meta)
+	{
+		operationIDFormat = defaultOperationIDFormat
+		setOperationIDFormat(expr.Root.API.Meta)
+		setOperationIDFormat(m.Service.Meta)
+		setOperationIDFormat(r.Endpoint.Meta)
+		setOperationIDFormat(m.Meta)
+	}
 
 	// request body
 	var requestBody *RequestBodyRef
@@ -278,47 +281,52 @@ func buildOperation(key string, r *expr.RouteExpr, bodies *EndpointBodies, rand 
 	}
 
 	// responses
-	responses := make(map[string]*ResponseRef, len(e.Responses))
-	for _, r := range e.Responses {
-		if e.MethodExpr.IsStreaming() {
-			// A streaming endpoint allows at most one successful response
-			// definition. So it is okay to change the first successful
-			// response to a HTTP 101 response for openapi docs.
-			if _, ok := responses[strconv.Itoa(expr.StatusSwitchingProtocols)]; !ok {
-				b := bodies.ResponseBodies[r.StatusCode]
-				delete(bodies.ResponseBodies, r.StatusCode)
-				r = r.Dup()
-				r.StatusCode = expr.StatusSwitchingProtocols
-				bodies.ResponseBodies[r.StatusCode] = b
+	var responses map[string]*ResponseRef
+	{
+		responses = make(map[string]*ResponseRef, len(e.Responses))
+		for _, r := range e.Responses {
+			if e.MethodExpr.IsStreaming() {
+				// A streaming endpoint allows at most one successful response
+				// definition. So it is okay to change the first successful
+				// response to a HTTP 101 response for openapi docs.
+				if _, ok := responses[strconv.Itoa(expr.StatusSwitchingProtocols)]; !ok {
+					b := bodies.ResponseBodies[r.StatusCode]
+					delete(bodies.ResponseBodies, r.StatusCode)
+					r = r.Dup()
+					r.StatusCode = expr.StatusSwitchingProtocols
+					bodies.ResponseBodies[r.StatusCode] = b
+				}
 			}
+			resp := responseFromExpr(r, bodies.ResponseBodies, rand)
+			responses[strconv.Itoa(r.StatusCode)] = &ResponseRef{Value: resp}
 		}
-		resp := responseFromExpr(r, bodies.ResponseBodies, rand)
-		responses[strconv.Itoa(r.StatusCode)] = &ResponseRef{Value: resp}
-	}
-	for _, er := range e.HTTPErrors {
-		if er.Description != "" && er.Response.Description == "" {
-			er.Response.Description = er.Description
-		}
-		resp := responseFromExpr(er.Response, bodies.ResponseBodies, rand)
-		desc := er.Name
-		if resp.Description != nil {
-			desc += ": " + *resp.Description
-		}
-		resp.Description = &desc
-		if er.Type == expr.ErrorResult && len(er.Response.Body.ExtractUserExamples()) == 0 {
-			for _, content := range resp.Content {
-				content.Example = nil
+		for _, er := range e.HTTPErrors {
+			if er.Description != "" && er.Response.Description == "" {
+				er.Response.Description = er.Description
 			}
+			resp := responseFromExpr(er.Response, bodies.ResponseBodies, rand)
+			desc := er.Name
+			if resp.Description != nil {
+				desc += ": " + *resp.Description
+			}
+			resp.Description = &desc
+			if er.Type == expr.ErrorResult && len(er.Response.Body.ExtractUserExamples()) == 0 {
+				for _, content := range resp.Content {
+					content.Example = nil
+				}
+			}
+			responses[strconv.Itoa(er.Response.StatusCode)] = &ResponseRef{Value: resp}
 		}
-		responses[strconv.Itoa(er.Response.StatusCode)] = &ResponseRef{Value: resp}
 	}
 
 	// tag names
 	var tagNames []string
-	tagNames = openapi.TagNamesFromExpr(e.Meta)
-	if len(tagNames) == 0 {
-		// By default tag with service name
-		tagNames = []string{e.Service.Name()}
+	{
+		tagNames = openapi.TagNamesFromExpr(e.Meta)
+		if len(tagNames) == 0 {
+			// By default tag with service name
+			tagNames = []string{r.Endpoint.Service.Name()}
+		}
 	}
 
 	// An endpoint can have multiple routes, so we need to be able to build a unique
@@ -355,42 +363,37 @@ func buildFileServerOperation(key string, fs *expr.HTTPFileServerExpr, api *expr
 
 	// parameters
 	var params []*ParameterRef
-	if len(wildcards) > 0 {
-		pref := ParameterRef{
-			Value: &Parameter{
-				// Use the literal wildcard (including leading '*') as name to match path if needed
-				// Note: HTTPWildcardRegex already strips '*' in ExtractHTTPWildcards; however
-				// the path key has been normalized to "/{name}" so the correct parameter name
-				// is the bare wildcard identifier.
-				Name:        wildcards[0],
-				Description: "Relative file path",
-				In:          "path",
-				Required:    true,
-				Schema: &openapi.Schema{ // string schema makes validators happy
-					Type: openapi.String,
+	{
+		if len(wildcards) > 0 {
+			pref := ParameterRef{
+				Value: &Parameter{
+					Name:        wildcards[0],
+					Description: "Relative file path",
+					In:          "path",
+					Required:    true,
 				},
-			},
+			}
+			params = []*ParameterRef{&pref}
 		}
-		params = []*ParameterRef{&pref}
 	}
 
 	// responses
 	var responses map[string]*ResponseRef
 	{
-		desc200 := "File downloaded"
+		desc := "File downloaded"
 		rref := ResponseRef{
 			Value: &Response{
-				Description: &desc200,
+				Description: &desc,
 			},
 		}
 		responses = map[string]*ResponseRef{
 			"200": &rref,
 		}
 		if len(wildcards) > 0 {
-			desc404 := "File not found"
+			desc = "File not found"
 			responses["404"] = &ResponseRef{
 				Value: &Response{
-					Description: &desc404,
+					Description: &desc,
 				},
 			}
 		}
@@ -398,10 +401,12 @@ func buildFileServerOperation(key string, fs *expr.HTTPFileServerExpr, api *expr
 
 	// OpenAPI summary
 	var summary string
-	summary = fmt.Sprintf("Download %s", fs.FilePath)
-	for n, mdata := range fs.Meta {
-		if (n == "openapi:summary" || n == "swagger:summary") && len(mdata) > 0 {
-			summary = mdata[0]
+	{
+		summary = fmt.Sprintf("Download %s", fs.FilePath)
+		for n, mdata := range fs.Meta {
+			if (n == "openapi:summary" || n == "swagger:summary") && len(mdata) > 0 {
+				summary = mdata[0]
+			}
 		}
 	}
 
@@ -415,17 +420,21 @@ func buildFileServerOperation(key string, fs *expr.HTTPFileServerExpr, api *expr
 		}
 	}
 
-	operationIDFormat = defaultOperationIDFormat
-	setOperationIDFormat(api.Meta)
-	setOperationIDFormat(svc.Meta)
-	setOperationIDFormat(fs.Meta)
+	{
+		operationIDFormat = defaultOperationIDFormat
+		setOperationIDFormat(api.Meta)
+		setOperationIDFormat(svc.Meta)
+		setOperationIDFormat(fs.Meta)
+	}
 
 	// tag names
 	var tagNames []string
-	tagNames = openapi.TagNamesFromExpr(fs.Meta)
-	if len(tagNames) == 0 {
-		// By default tag with service name
-		tagNames = []string{svc.Name()}
+	{
+		tagNames = openapi.TagNamesFromExpr(fs.Meta)
+		if len(tagNames) == 0 {
+			// By default tag with service name
+			tagNames = []string{svc.Name()}
+		}
 	}
 
 	return &Operation{
@@ -643,28 +652,30 @@ func buildTags(api *expr.APIExpr) []*openapi.Tag {
 	}
 
 	// sort tag names alphabetically
-	keys := make([]string, 0, len(m))
+	var keys []string
 	for k := range m {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
-	tags := make([]*openapi.Tag, 0, len(keys))
-	for _, k := range keys {
-		tags = append(tags, m[k])
-	}
+	var tags []*openapi.Tag
+	{
+		for _, k := range keys {
+			tags = append(tags, m[k])
+		}
 
-	if len(tags) == 0 {
-		// add service name and description to the tags since we tag every
-		// operation with service name when no custom tag is defined
-		for _, s := range api.HTTP.Services {
-			if !openapi.MustGenerate(s.Meta) || !openapi.MustGenerate(s.ServiceExpr.Meta) {
-				continue
+		if len(tags) == 0 {
+			// add service name and description to the tags since we tag every
+			// operation with service name when no custom tag is defined
+			for _, s := range api.HTTP.Services {
+				if !openapi.MustGenerate(s.Meta) || !openapi.MustGenerate(s.ServiceExpr.Meta) {
+					continue
+				}
+				tags = append(tags, &openapi.Tag{
+					Name:        s.Name(),
+					Description: s.Description(),
+				})
 			}
-			tags = append(tags, &openapi.Tag{
-				Name:        s.Name(),
-				Description: s.Description(),
-			})
 		}
 	}
 	return tags

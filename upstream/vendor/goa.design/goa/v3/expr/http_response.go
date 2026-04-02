@@ -74,14 +74,6 @@ const (
 	StatusNetworkAuthenticationRequired = 511 // RFC 6585, 6
 )
 
-const (
-	RPCParseError     = -32700 // JSON-RPC 2.0, 5.1
-	RPCInvalidRequest = -32600
-	RPCMethodNotFound = -32601
-	RPCInvalidParams  = -32602
-	RPCInternalError  = -32603
-)
-
 type (
 	// HTTPResponseExpr defines a HTTP response including its status code,
 	// headers and result type.
@@ -188,27 +180,25 @@ func (r *HTTPResponseExpr) Validate(e *HTTPEndpointExpr) *eval.ValidationErrors 
 
 	if !r.Headers.IsEmpty() {
 		verr.Merge(r.Headers.Validate("HTTP response headers", r))
-		switch {
-		case isEmpty(e.MethodExpr.Result):
+		if isEmpty(e.MethodExpr.Result) {
 			verr.Add(r, "response defines headers but result is empty")
-		case IsObject(e.MethodExpr.Result.Type):
+		} else if IsObject(e.MethodExpr.Result.Type) {
 			mobj := AsObject(r.Headers.Type)
 			for _, h := range *mobj {
 				t := resultAttributeType(h.Name)
-				switch {
-				case t == nil:
+				if t == nil {
 					verr.Add(r, "header %q has no equivalent attribute in%s result type, use notation 'attribute_name:header_name' to identify corresponding result type attribute.", h.Name, inview)
-				case IsArray(t):
+				} else if IsArray(t) {
 					if !IsPrimitive(AsArray(t).ElemType.Type) {
 						verr.Add(e, "attribute %q used in HTTP headers must be a primitive type or an array of primitive types.", h.Name)
 					}
-				case !IsPrimitive(t):
+				} else if !IsPrimitive(t) {
 					verr.Add(e, "attribute %q used in HTTP headers must be a primitive type or an array of primitive types.", h.Name)
 				}
 			}
-		case len(*AsObject(r.Headers.Type)) > 1:
+		} else if len(*AsObject(r.Headers.Type)) > 1 {
 			verr.Add(r, "response defines more than one headers but result type is not an object")
-		case IsArray(e.MethodExpr.Result.Type):
+		} else if IsArray(e.MethodExpr.Result.Type) {
 			if !IsPrimitive(AsArray(e.MethodExpr.Result.Type).ElemType.Type) {
 				verr.Add(e, "Array result is mapped to an HTTP header but is not an array of primitive types.")
 			}
@@ -216,10 +206,9 @@ func (r *HTTPResponseExpr) Validate(e *HTTPEndpointExpr) *eval.ValidationErrors 
 	}
 	if !r.Cookies.IsEmpty() {
 		verr.Merge(r.Cookies.Validate("HTTP response cookies", r))
-		switch {
-		case isEmpty(e.MethodExpr.Result):
+		if isEmpty(e.MethodExpr.Result) {
 			verr.Add(r, "response defines cookies but result is empty")
-		case IsObject(e.MethodExpr.Result.Type):
+		} else if IsObject(e.MethodExpr.Result.Type) {
 			mobj := AsObject(r.Cookies.Type)
 			for _, c := range *mobj {
 				t := resultAttributeType(c.Name)
@@ -230,12 +219,10 @@ func (r *HTTPResponseExpr) Validate(e *HTTPEndpointExpr) *eval.ValidationErrors 
 					verr.Add(e, "attribute %q used in HTTP cookies must be a primitive type.", c.Name)
 				}
 			}
-		default:
-			if len(*AsObject(r.Cookies.Type)) > 1 {
-				verr.Add(r, "response defines more than one cookies but result type is not an object")
-			} else if IsArray(e.MethodExpr.Result.Type) {
-				verr.Add(e, "Array result is mapped to an HTTP cookie.")
-			}
+		} else if len(*AsObject(r.Cookies.Type)) > 1 {
+			verr.Add(r, "response defines more than one cookies but result type is not an object")
+		} else if IsArray(e.MethodExpr.Result.Type) {
+			verr.Add(e, "Array result is mapped to an HTTP cookie.")
 		}
 	}
 	if r.Body != nil {
