@@ -2,10 +2,8 @@ package openapiv2
 
 import (
 	"fmt"
-	"maps"
 	"net/http"
 	"net/url"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -68,7 +66,9 @@ func NewV2(root *expr.RootExpr, h *expr.HostExpr) (*V2, error) {
 		if !openapi.MustGenerate(res.Meta) || !openapi.MustGenerate(res.ServiceExpr.Meta) {
 			continue
 		}
-		maps.Copy(s.Paths, openapi.ExtensionsFromExpr(res.Meta))
+		for k, v := range openapi.ExtensionsFromExpr(res.Meta) {
+			s.Paths[k] = v
+		}
 		for _, fs := range res.FileServers {
 			if !openapi.MustGenerate(fs.Meta) || !openapi.MustGenerate(fs.Service.Meta) {
 				continue
@@ -121,7 +121,7 @@ func defaultURI(h *expr.HostExpr) string {
 // addScopeDescription generates and adds required scopes to the scheme's description.
 func addScopeDescription(scopes []*expr.ScopeExpr, sd *SecurityDefinition) {
 	// Generate scopes to add to description
-	lines := make([]string, 0, len(scopes))
+	var lines []string
 
 	for _, scope := range scopes {
 		lines = append(lines, fmt.Sprintf("  * `%s`: %s", scope.Name, scope.Description))
@@ -234,7 +234,7 @@ func hasAbsoluteRoutes(root *expr.RootExpr) bool {
 	return hasAbsoluteRoutes
 }
 
-func summaryFromExpr(name string, e *expr.HTTPEndpointExpr, meta expr.MetaExpr) string {
+func summaryFromExpr(name string, e *expr.HTTPEndpointExpr) string {
 	for n, mdata := range e.Meta {
 		if (n == "openapi:summary" || n == "swagger:summary") && len(mdata) > 0 {
 			return mdata[0]
@@ -250,7 +250,7 @@ func summaryFromExpr(name string, e *expr.HTTPEndpointExpr, meta expr.MetaExpr) 
 			return mdata[0]
 		}
 	}
-	for n, mdata := range meta {
+	for n, mdata := range expr.Root.API.Meta {
 		if (n == "openapi:summary" || n == "swagger:summary") && len(mdata) > 0 {
 			return mdata[0]
 		}
@@ -277,9 +277,12 @@ func paramsFromExpr(params *expr.MappedAttributeExpr, path string) []*Parameter 
 	)
 	codegen.WalkMappedAttr(params, func(n, pn string, required bool, at *expr.AttributeExpr) error { // nolint: errcheck
 		in := "query"
-		if slices.Contains(wildcards, n) {
-			in = "path"
-			required = true
+		for _, w := range wildcards {
+			if n == w {
+				in = "path"
+				required = true
+				break
+			}
 		}
 		param := paramFor(at, pn, in, required)
 		res = append(res, param)
@@ -518,7 +521,13 @@ func buildPathFromExpr(s *V2, root *expr.RootExpr, h *expr.HostExpr, route *expr
 			resp := responseSpecFromExpr(s, root, r, endpoint.Service.Name())
 			responses[strconv.Itoa(r.StatusCode)] = resp
 			if r.ContentType != "" {
-				foundCT := slices.Contains(produces, r.ContentType)
+				foundCT := false
+				for _, ct := range produces {
+					if ct == r.ContentType {
+						foundCT = true
+						break
+					}
+				}
 				if !foundCT {
 					produces = append(produces, r.ContentType)
 				}
@@ -590,7 +599,7 @@ func buildPathFromExpr(s *V2, root *expr.RootExpr, h *expr.HostExpr, route *expr
 		for i, req := range endpoint.Requirements {
 			requirement := make(map[string][]string)
 			for _, s := range req.Schemes {
-				requirement[s.Hash()] = nil
+				requirement[s.Hash()] = []string{}
 				switch s.Kind {
 				case expr.OAuth2Kind:
 					if len(req.Scopes) > 0 {
@@ -616,7 +625,7 @@ func buildPathFromExpr(s *V2, root *expr.RootExpr, h *expr.HostExpr, route *expr
 		operation := &Operation{
 			Tags:         tagNames,
 			Description:  description,
-			Summary:      summaryFromExpr(endpoint.Name()+" "+endpoint.Service.Name(), endpoint, root.API.Meta),
+			Summary:      summaryFromExpr(endpoint.Name()+" "+endpoint.Service.Name(), endpoint),
 			ExternalDocs: openapi.DocsFromExpr(endpoint.MethodExpr.Docs, endpoint.MethodExpr.Meta),
 			OperationID:  operationID,
 			Parameters:   params,
@@ -715,16 +724,16 @@ func initExclusiveMinimumValidation(def any, exclMin *float64) {
 	}
 }
 
-func initMinimumValidation(def any, minimum *float64) {
+func initMinimumValidation(def any, min *float64) {
 	switch actual := def.(type) {
 	case *Parameter:
-		actual.Minimum = minimum
+		actual.Minimum = min
 		actual.ExclusiveMinimum = false
 	case *Header:
-		actual.Minimum = minimum
+		actual.Minimum = min
 		actual.ExclusiveMinimum = false
 	case *Items:
-		actual.Minimum = minimum
+		actual.Minimum = min
 		actual.ExclusiveMinimum = false
 	}
 }
@@ -743,47 +752,47 @@ func initExclusiveMaximumValidation(def any, exclMax *float64) {
 	}
 }
 
-func initMaximumValidation(def any, maximum *float64) {
+func initMaximumValidation(def any, max *float64) {
 	switch actual := def.(type) {
 	case *Parameter:
-		actual.Maximum = maximum
+		actual.Maximum = max
 		actual.ExclusiveMaximum = false
 	case *Header:
-		actual.Maximum = maximum
+		actual.Maximum = max
 		actual.ExclusiveMaximum = false
 	case *Items:
-		actual.Maximum = maximum
+		actual.Maximum = max
 		actual.ExclusiveMaximum = false
 	}
 }
 
-func initMinLengthValidation(def any, isArray bool, minLength *int) {
+func initMinLengthValidation(def any, isArray bool, min *int) {
 	switch actual := def.(type) {
 	case *Parameter:
 		if isArray {
-			actual.MinItems = minLength
+			actual.MinItems = min
 		} else {
-			actual.MinLength = minLength
+			actual.MinLength = min
 		}
 	case *Header:
-		actual.MinLength = minLength
+		actual.MinLength = min
 	case *Items:
-		actual.MinLength = minLength
+		actual.MinLength = min
 	}
 }
 
-func initMaxLengthValidation(def any, isArray bool, maxLength *int) {
+func initMaxLengthValidation(def any, isArray bool, max *int) {
 	switch actual := def.(type) {
 	case *Parameter:
 		if isArray {
-			actual.MaxItems = maxLength
+			actual.MaxItems = max
 		} else {
-			actual.MaxLength = maxLength
+			actual.MaxLength = max
 		}
 	case *Header:
-		actual.MaxLength = maxLength
+		actual.MaxLength = max
 	case *Items:
-		actual.MaxLength = maxLength
+		actual.MaxLength = max
 	}
 }
 

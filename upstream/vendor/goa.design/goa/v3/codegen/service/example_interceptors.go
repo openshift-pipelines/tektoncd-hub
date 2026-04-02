@@ -11,10 +11,10 @@ import (
 )
 
 // ExampleInterceptorsFiles returns the files for the example server and client interceptors.
-func ExampleInterceptorsFiles(genpkg string, r *expr.RootExpr, services *ServicesData) []*codegen.File {
+func ExampleInterceptorsFiles(genpkg string, r *expr.RootExpr) []*codegen.File {
 	var fw []*codegen.File
 	for _, svc := range r.Services {
-		if f := exampleInterceptorsFile(genpkg, svc, services); f != nil {
+		if f := exampleInterceptorsFile(genpkg, svc); f != nil {
 			fw = append(fw, f...)
 		}
 	}
@@ -22,8 +22,8 @@ func ExampleInterceptorsFiles(genpkg string, r *expr.RootExpr, services *Service
 }
 
 // exampleInterceptorsFile returns the example interceptors for the given service.
-func exampleInterceptorsFile(genpkg string, svc *expr.ServiceExpr, services *ServicesData) []*codegen.File {
-	sdata := services.Get(svc.Name)
+func exampleInterceptorsFile(genpkg string, svc *expr.ServiceExpr) []*codegen.File {
+	sdata := Services.Get(svc.Name)
 	data := map[string]any{
 		"ServiceName":        sdata.Name,
 		"StructName":         sdata.StructName,
@@ -49,8 +49,8 @@ func exampleInterceptorsFile(genpkg string, svc *expr.ServiceExpr, services *Ser
 						{Path: path.Join(genpkg, sdata.PathName), Name: sdata.PkgName},
 					}),
 					{
-						Name:   "example-server-interceptor",
-						Source: serviceTemplates.Read(exampleServerInterceptorT),
+						Name:   "exmaple-server-interceptor",
+						Source: readTemplate("example_server_interceptor"),
 						Data:   data,
 					},
 				},
@@ -74,7 +74,7 @@ func exampleInterceptorsFile(genpkg string, svc *expr.ServiceExpr, services *Ser
 					}),
 					{
 						Name:   "example-client-interceptor",
-						Source: serviceTemplates.Read(exampleClientInterceptorT),
+						Source: readTemplate("example_client_interceptor"),
 						Data:   data,
 					},
 				},

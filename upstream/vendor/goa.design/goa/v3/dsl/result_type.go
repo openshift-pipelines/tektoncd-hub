@@ -371,7 +371,10 @@ func CollectionOf(v any, adsl ...func()) *expr.ResultTypeExpr {
 			// at all) then inherit the views from the collection
 			// element.
 			rt.Views = make([]*expr.ViewExpr, len(m.Views))
-			copy(rt.Views, m.Views)
+			for i, v := range m.Views {
+				v := v
+				rt.Views[i] = v
+			}
 		}
 	})
 	// do not execute the DSL right away, will be done last to make sure

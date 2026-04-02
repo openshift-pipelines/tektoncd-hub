@@ -2,7 +2,6 @@ package expr
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"goa.design/goa/v3/eval"
@@ -420,7 +419,12 @@ func (a *AttributeExpr) AllRequired() []string {
 // attribute, false otherwise. This method only applies to attributes of type
 // Object.
 func (a *AttributeExpr) IsRequired(attName string) bool {
-	return slices.Contains(a.AllRequired(), attName)
+	for _, name := range a.AllRequired() {
+		if name == attName {
+			return true
+		}
+	}
+	return false
 }
 
 // IsRequiredNoDefault returns true if the given string matches the name of a
@@ -712,8 +716,11 @@ func (a *AttributeExpr) validateEnumDefault(ctx string, parent eval.Expression) 
 	verr := new(eval.ValidationErrors)
 	if a.DefaultValue != nil && a.Validation != nil && a.Validation.Values != nil {
 		var found bool
-		if slices.Contains(a.Validation.Values, a.DefaultValue) {
-			found = true
+		for _, e := range a.Validation.Values {
+			if e == a.DefaultValue {
+				found = true
+				break
+			}
 		}
 		if !found {
 			verr.Add(
@@ -858,7 +865,13 @@ func (v *ValidationExpr) Merge(other *ValidationExpr) {
 // AddRequired merges the required fields into v.
 func (v *ValidationExpr) AddRequired(required ...string) {
 	for _, r := range required {
-		found := slices.Contains(v.Required, r)
+		found := false
+		for _, rr := range v.Required {
+			if r == rr {
+				found = true
+				break
+			}
+		}
 		if !found {
 			v.Required = append(v.Required, r)
 		}

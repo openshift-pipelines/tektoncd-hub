@@ -96,7 +96,7 @@ func (u *UserTypeExpr) recExample(r *ExampleGenerator) *any {
 	var ex any
 	pex := &ex
 	r.HaveSeen(u.ID(), pex)
-	actual := u.AttributeExpr.Example(r)
+	actual := u.Type.Example(r)
 	*pex = actual
 	return pex
 }
