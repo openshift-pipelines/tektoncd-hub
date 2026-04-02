@@ -24,7 +24,7 @@ jobs:
         rm -fR upstream
         git clone https://github.com/openshift-pipelines/hub upstream
         pushd upstream
-        git checkout -B release-v1.23.7 origin/release-v1.23.7
+        git checkout -B release-v1.23.8 origin/release-v1.23.8
         popd
     - name: Commit new changes
       run: |
