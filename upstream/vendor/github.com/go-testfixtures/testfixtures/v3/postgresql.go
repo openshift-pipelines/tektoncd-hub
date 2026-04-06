@@ -3,7 +3,13 @@ package testfixtures
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
+
+	"golang.org/x/sync/errgroup"
+
+	"github.com/go-testfixtures/testfixtures/v3/shared"
 )
 
 type postgreSQL struct {
@@ -19,6 +25,9 @@ type postgreSQL struct {
 	nonDeferrableConstraints []pgConstraint
 	constraints              []pgConstraint
 	tablesChecksum           map[string]string
+
+	version                 int
+	tablesHasIdentityColumn map[string]bool
 }
 
 type pgConstraint struct {
@@ -28,42 +37,55 @@ type pgConstraint struct {
 }
 
 func (h *postgreSQL) init(db *sql.DB) error {
-	var err error
-
-	h.tables, err = h.tableNames(db)
-	if err != nil {
+	var grp errgroup.Group
+	grp.Go(func() error {
+		var err error
+		h.tables, err = h.tableNames(db)
 		return err
-	}
-
-	h.sequences, err = h.getSequences(db)
-	if err != nil {
+	})
+	grp.Go(func() error {
+		var err error
+		h.sequences, err = h.getSequences(db)
 		return err
-	}
-
-	h.nonDeferrableConstraints, err = h.getNonDeferrableConstraints(db)
-	if err != nil {
+	})
+	grp.Go(func() error {
+		var err error
+		h.nonDeferrableConstraints, err = h.getNonDeferrableConstraints(db)
 		return err
-	}
-
-	h.constraints, err = h.getConstraints(db)
-	if err != nil {
+	})
+	grp.Go(func() error {
+		var err error
+		h.constraints, err = h.getConstraints(db)
+		return err
+	})
+	grp.Go(func() error {
+		var err error
+		h.version, err = h.getMajorVersion(db)
+		return err
+	})
+	grp.Go(func() error {
+		var err error
+		h.tablesHasIdentityColumn, err = h.buildTableHasIdentityColumn(db)
+		return err
+	})
+	if err := grp.Wait(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (*postgreSQL) paramType() int {
-	return paramTypeDollar
+func (*postgreSQL) paramType() ParamType {
+	return ParamTypeDollar
 }
 
-func (*postgreSQL) databaseName(q queryable) (string, error) {
+func (*postgreSQL) databaseName(q shared.Queryable) (string, error) {
 	var dbName string
 	err := q.QueryRow("SELECT current_database()").Scan(&dbName)
 	return dbName, err
 }
 
-func (h *postgreSQL) tableNames(q queryable) ([]string, error) {
+func (h *postgreSQL) tableNames(q shared.Queryable) ([]string, error) {
 	var tables []string
 
 	const sql = `
@@ -71,7 +93,7 @@ func (h *postgreSQL) tableNames(q queryable) ([]string, error) {
 		FROM pg_class
 		INNER JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
 		WHERE pg_class.relkind = 'r'
-		  AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_schema', 'crdb_internal')
+		  AND pg_namespace.nspname NOT IN ('pg_catalog', 'information_schema', 'crdb_internal', 'pg_extension')
 		  AND pg_namespace.nspname NOT LIKE 'pg_toast%'
 		  AND pg_namespace.nspname NOT LIKE '\_timescaledb%';
 	`
@@ -79,7 +101,9 @@ func (h *postgreSQL) tableNames(q queryable) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var table string
@@ -94,7 +118,7 @@ func (h *postgreSQL) tableNames(q queryable) ([]string, error) {
 	return tables, nil
 }
 
-func (h *postgreSQL) getSequences(q queryable) ([]string, error) {
+func (h *postgreSQL) getSequences(q shared.Queryable) ([]string, error) {
 	const sql = `
 		SELECT pg_namespace.nspname || '.' || pg_class.relname AS sequence_name
 		FROM pg_class
@@ -107,7 +131,9 @@ func (h *postgreSQL) getSequences(q queryable) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	var sequences []string
 	for rows.Next() {
@@ -123,7 +149,7 @@ func (h *postgreSQL) getSequences(q queryable) ([]string, error) {
 	return sequences, nil
 }
 
-func (*postgreSQL) getNonDeferrableConstraints(q queryable) ([]pgConstraint, error) {
+func (*postgreSQL) getNonDeferrableConstraints(q shared.Queryable) ([]pgConstraint, error) {
 	var constraints []pgConstraint
 
 	const sql = `
@@ -138,7 +164,9 @@ func (*postgreSQL) getNonDeferrableConstraints(q queryable) ([]pgConstraint, err
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var constraint pgConstraint
@@ -153,7 +181,7 @@ func (*postgreSQL) getNonDeferrableConstraints(q queryable) ([]pgConstraint, err
 	return constraints, nil
 }
 
-func (h *postgreSQL) getConstraints(q queryable) ([]pgConstraint, error) {
+func (h *postgreSQL) getConstraints(q shared.Queryable) ([]pgConstraint, error) {
 	var constraints []pgConstraint
 
 	const sql = `
@@ -169,7 +197,9 @@ func (h *postgreSQL) getConstraints(q queryable) ([]pgConstraint, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var constraint pgConstraint
@@ -320,32 +350,38 @@ func (h *postgreSQL) disableReferentialIntegrity(db *sql.DB, loadFn loadFunction
 }
 
 func (h *postgreSQL) resetSequences(db *sql.DB) error {
+	if len(h.sequences) == 0 {
+		return nil
+	}
+
 	resetSequencesTo := h.resetSequencesTo
 	if resetSequencesTo == 0 {
 		resetSequencesTo = 10000
 	}
 
+	b := strings.Builder{}
 	for _, sequence := range h.sequences {
-		_, err := db.Exec(fmt.Sprintf("SELECT SETVAL('%s', %d)", sequence, resetSequencesTo))
-		if err != nil {
-			return err
-		}
+		b.WriteString(fmt.Sprintf("SELECT SETVAL('%s', %d);", sequence, resetSequencesTo))
 	}
-	return nil
+
+	_, err := db.Exec(b.String())
+	return err
 }
 
-func (h *postgreSQL) isTableModified(q queryable, tableName string) (bool, error) {
+func (h *postgreSQL) isTableModified(q shared.Queryable, tableName string) (bool, error) {
+	oldChecksum, found := h.tablesChecksum[tableName]
+	if !found {
+		return true, nil
+	}
+
 	checksum, err := h.getChecksum(q, tableName)
 	if err != nil {
-		return false, err
+		return true, err
 	}
-
-	oldChecksum := h.tablesChecksum[tableName]
-
-	return oldChecksum == "" || checksum != oldChecksum, nil
+	return checksum != oldChecksum, nil
 }
 
-func (h *postgreSQL) afterLoad(q queryable) error {
+func (h *postgreSQL) computeTablesChecksum(q shared.Queryable) error {
 	if h.tablesChecksum != nil {
 		return nil
 	}
@@ -361,7 +397,7 @@ func (h *postgreSQL) afterLoad(q queryable) error {
 	return nil
 }
 
-func (h *postgreSQL) getChecksum(q queryable, tableName string) (string, error) {
+func (h *postgreSQL) getChecksum(q shared.Queryable, tableName string) (string, error) {
 	sqlStr := fmt.Sprintf(`
 			SELECT md5(CAST((json_agg(t.*)) AS TEXT))
 			FROM %s AS t
@@ -377,9 +413,102 @@ func (h *postgreSQL) getChecksum(q queryable, tableName string) (string, error) 
 }
 
 func (*postgreSQL) quoteKeyword(s string) string {
+	isQuotedColumn := strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`)
+	if isQuotedColumn {
+		return s
+	}
+
 	parts := strings.Split(s, ".")
 	for i, p := range parts {
 		parts[i] = fmt.Sprintf(`"%s"`, p)
 	}
 	return strings.Join(parts, ".")
+}
+
+func (h *postgreSQL) buildInsertSQL(q shared.Queryable, tableName string, columns, values []string) (string, error) {
+	if h.version >= 10 {
+		if h.tableHasIdentityColumn(tableName) {
+			return fmt.Sprintf(
+				"INSERT INTO %s (%s) OVERRIDING SYSTEM VALUE VALUES (%s)",
+				tableName,
+				strings.Join(columns, ", "),
+				strings.Join(values, ", "),
+			), nil
+		}
+	}
+
+	return h.baseHelper.buildInsertSQL(q, tableName, columns, values)
+}
+
+func (h *postgreSQL) tableHasIdentityColumn(tableName string) bool {
+	tableName = strings.Trim(tableName, `"`)
+	if h.tablesHasIdentityColumn[tableName] {
+		return true
+	}
+
+	// We might get database.table notation table names, this works around that.
+	parts := strings.Split(tableName, ".")
+	tableName = parts[0]
+	if len(parts) > 1 {
+		tableName = parts[1]
+	}
+
+	tableName = strings.Trim(tableName, `"`)
+	return h.tablesHasIdentityColumn[tableName]
+}
+
+func (h *postgreSQL) buildTableHasIdentityColumn(q shared.Queryable) (map[string]bool, error) {
+	const query = `SELECT table_name, COUNT(*) AS count
+    FROM information_schema.columns
+    WHERE
+      table_schema NOT IN ('pg_catalog', 'information_schema', 'crdb_internal') AND
+      table_schema NOT LIKE 'pg_toast%' AND
+      table_schema NOT LIKE '\_timescaledb%' AND
+      is_identity = 'YES'
+    GROUP BY table_name;`
+
+	rows, err := q.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	tablesHasIdentityColumn := make(map[string]bool)
+	for rows.Next() {
+		var count int
+		var tableName string
+		if err = rows.Scan(&tableName, &count); err != nil {
+			return nil, err
+		}
+
+		tablesHasIdentityColumn[tableName] = count > 0
+	}
+
+	return tablesHasIdentityColumn, rows.Err()
+}
+
+func (h *postgreSQL) getMajorVersion(q shared.Queryable) (int, error) {
+	var version string
+	err := q.QueryRow("SELECT VERSION()").Scan(&version)
+	if err != nil {
+		return 0, err
+	}
+
+	return h.parseMajorVersion(version)
+}
+
+func (*postgreSQL) parseMajorVersion(version string) (int, error) {
+	re := regexp.MustCompile(`\d+`)
+	versionNumbers := re.FindAllString(version, -1)
+	if len(versionNumbers) > 0 {
+		majorVersion, err := strconv.Atoi(versionNumbers[0])
+		if err != nil {
+			return 0, err
+		}
+		return majorVersion, nil
+	}
+
+	return 0, fmt.Errorf("testfixtures: could not parse major version from: %s", version)
 }
