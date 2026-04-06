@@ -1,18 +1,13 @@
-const RealDate = global.Date;
-const FIXED = new RealDate('2026-01-01T10:20:30Z');
-
+//Sets a Fake date for test
 export const FakeDate = () => {
   beforeEach(() => {
-    global.Date = class extends RealDate {
-      constructor(...args: [number?]) {
-        super(args[0] ?? FIXED.getTime());
-      }
-      static now = () => FIXED.getTime();
-    } as DateConstructor;
-  });
-  afterEach(() => {
-    global.Date = RealDate;
+    global.Date.now = jest.fn(() => new Date('2021-01-01T10:20:30Z').getTime());
   });
 };
 
-export const ActualDate = () => {};
+//Sets an Actual date for test
+export const ActualDate = () => {
+  afterEach(() => {
+    global.Date = Date;
+  });
+};
