@@ -3,7 +3,6 @@ package expr
 import (
 	"fmt"
 	"reflect"
-	"sort"
 
 	"goa.design/goa/v3/eval"
 )
@@ -415,7 +414,7 @@ func (a *Array) IsCompatible(val any) bool {
 func (a *Array) Example(r *ExampleGenerator) any {
 	count := NewLength(a.ElemType, r)
 	res := make([]any, count)
-	for i := range count {
+	for i := 0; i < count; i++ {
 		res[i] = a.ElemType.Example(r)
 		if res[i] == nil {
 			// Handle the case of recursive data structures
@@ -577,7 +576,7 @@ func (m *Map) Example(r *ExampleGenerator) any {
 	}
 	count := r.Int()%3 + 1
 	pair := map[any]any{}
-	for range count {
+	for i := 0; i < count; i++ {
 		k := m.KeyType.Example(r)
 		v := m.ElemType.Example(r)
 		if k != nil && v != nil {
@@ -592,15 +591,8 @@ func (m *Map) Example(r *ExampleGenerator) any {
 // which cannot be handled by json.Marshal.
 func (m *Map) MakeMap(raw map[any]any) any {
 	ma := reflect.MakeMap(toReflectType(m))
-	keys := make([]any, 0, len(raw))
-	for key := range raw {
-		keys = append(keys, key)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		return reflect.ValueOf(keys[i]).String() < reflect.ValueOf(keys[j]).String()
-	})
-	for _, key := range keys {
-		ma.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(raw[key]))
+	for key, value := range raw {
+		ma.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(value))
 	}
 	return ma.Interface()
 }

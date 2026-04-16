@@ -18,7 +18,7 @@ import (
 // the first host is used to set the OpenAPI v2 specification 'host' and
 // 'basePath' values.
 //
-// Server must appear in an API expression.
+// Server must appear in a API expression.
 //
 // Server takes two arguments: the name of the server and the defining DSL.
 //
@@ -57,15 +57,14 @@ import (
 //	    })
 //	})
 func Server(name string, fn ...func()) *expr.ServerExpr {
-	server := &expr.ServerExpr{Name: name}
 	if len(fn) > 1 {
-		eval.TooManyArgError()
-		return server
+		eval.ReportError("too many arguments given to Server")
 	}
 	api, ok := eval.Current().(*expr.APIExpr)
 	if !ok {
 		eval.IncompatibleDSL()
 	}
+	server := &expr.ServerExpr{Name: name}
 	if len(fn) > 0 {
 		eval.Execute(fn[0], server)
 	}

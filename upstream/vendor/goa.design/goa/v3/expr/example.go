@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"math"
 	"regexp"
-	"regexp/syntax"
-	"strings"
 	"time"
+
+	regen "github.com/AnatolyRugalev/goregen"
+	googleuuid "github.com/google/uuid"
 )
 
 const (
@@ -102,17 +103,19 @@ func NewLength(a *AttributeExpr, r *ExampleGenerator) int {
 			maxlength = float64(*a.Validation.MaxLength)
 		}
 		count := 0
-		switch {
-		case math.IsInf(minlength, 1):
+		if math.IsInf(minlength, 1) {
 			count = int(maxlength) - (r.Int() % 3)
-		case math.IsInf(maxlength, -1):
+		} else if math.IsInf(maxlength, -1) {
 			count = int(minlength) + (r.Int() % 3)
-		case minlength < maxlength:
-			diff := min(int(maxlength-minlength), maxLength)
+		} else if minlength < maxlength {
+			diff := int(maxlength - minlength)
+			if diff > maxLength {
+				diff = maxLength
+			}
 			count = int(minlength) + (r.Int() % diff)
-		case minlength == maxlength:
+		} else if minlength == maxlength {
 			count = int(minlength)
-		default:
+		} else {
 			panic("Validation: MinLength > MaxLength")
 		}
 		if count > maxLength {
@@ -163,14 +166,14 @@ func byLength(a *AttributeExpr, r *ExampleGenerator) any {
 	case MapKind:
 		raw := make(map[any]any)
 		m := a.Type.(*Map)
-		for range count {
+		for i := 0; i < count; i++ {
 			raw[m.KeyType.Example(r)] = m.ElemType.Example(r)
 		}
 		return m.MakeMap(raw)
 	case ArrayKind:
 		raw := make([]any, count)
 		ar := a.Type.(*Array)
-		for i := range count {
+		for i := 0; i < count; i++ {
 			raw[i] = ar.ElemType.Example(r)
 		}
 		return ar.MakeSlice(raw)
@@ -206,17 +209,23 @@ func byFormat(a *AttributeExpr, r *ExampleGenerator) any {
 		FormatIP:       r.IPv4Address().String(),
 		FormatURI:      r.URL(),
 		FormatMAC: func() string {
-			res, err := syntax.Parse(`([0-9A-F]{2}-){5}[0-9A-F]{2}`, 0)
+			res, err := regen.Generate(`([0-9A-F]{2}-){5}[0-9A-F]{2}`)
 			if err != nil {
 				return "12-34-56-78-9A-BC"
 			}
-			return patgen(res, r)
+			return res
 		}(),
 		FormatCIDR:    "192.168.100.14/24",
 		FormatRegexp:  r.Characters(3) + ".*",
 		FormatRFC1123: time.Unix(int64(r.Int())%1454957045, 0).UTC().Format(time.RFC1123), // to obtain a "fixed" rand
-		FormatUUID:    r.UUID(),
-		FormatJSON:    `{"name":"example","email":"mail@example.com"}`,
+		FormatUUID: func() string {
+			uuid, err := googleuuid.NewUUID()
+			if err != nil {
+				return "12345678-1234-1234-9232-123456789ABC"
+			}
+			return uuid.String()
+		}(),
+		FormatJSON: `{"name":"example","email":"mail@example.com"}`,
 	}[format]; ok {
 		return res
 	}
@@ -231,67 +240,11 @@ func byPattern(a *AttributeExpr, r *ExampleGenerator) any {
 		return false
 	}
 	pattern := a.Validation.Pattern
-	re, err := syntax.Parse(pattern, syntax.Perl)
+	gen, err := regen.NewGenerator(pattern, &regen.GeneratorArgs{MaxUnboundedRepeatCount: 6})
 	if err != nil {
 		return r.Name()
 	}
-	return patgen(re.Simplify(), r)
-}
-
-func patgen(re *syntax.Regexp, r *ExampleGenerator) string {
-	switch re.Op {
-	case syntax.OpAlternate:
-		i := r.Int() % len(re.Sub)
-		return patgen(re.Sub[i], r)
-	case syntax.OpCapture:
-		return patgen(re.Sub[0], r)
-	case syntax.OpConcat:
-		var res strings.Builder
-		for _, sub := range re.Sub {
-			res.WriteString(patgen(sub, r))
-		}
-		return res.String()
-	case syntax.OpLiteral:
-		return string(re.Rune)
-	case syntax.OpStar:
-		var res strings.Builder
-		count := r.Int() % 3
-		for range count {
-			res.WriteString(patgen(re.Sub[0], r))
-		}
-		return res.String()
-	case syntax.OpPlus:
-		var res strings.Builder
-		count := r.Int()%2 + 1
-		for range count {
-			res.WriteString(patgen(re.Sub[0], r))
-		}
-		return res.String()
-	case syntax.OpQuest:
-		if r.Int()%2 == 0 {
-			return patgen(re.Sub[0], r)
-		}
-		return ""
-	case syntax.OpRepeat:
-		var res strings.Builder
-		for i := 0; i < re.Min; i++ {
-			res.WriteString(patgen(re.Sub[0], r))
-		}
-		return res.String()
-	case syntax.OpCharClass:
-		var chars []rune
-		for i := 0; i < len(re.Rune); i += 2 {
-			start, end := re.Rune[i], re.Rune[i+1]
-			for j := start; j <= end; j++ {
-				chars = append(chars, j)
-			}
-		}
-		return string(chars[r.Int()%len(chars)])
-	case syntax.OpAnyChar, syntax.OpAnyCharNotNL:
-		return r.Characters(1)
-	default:
-		return ""
-	}
+	return gen.Generate()
 }
 
 func byMinMax(a *AttributeExpr, r *ExampleGenerator) any {
@@ -299,84 +252,83 @@ func byMinMax(a *AttributeExpr, r *ExampleGenerator) any {
 		return nil
 	}
 	var (
-		minimum float64
-		maximum = math.Inf(1)
-		sign    = 1
+		min  float64
+		max  = math.Inf(1)
+		sign = 1
 	)
 	if a.Validation.ExclusiveMaximum != nil {
-		maximum = *a.Validation.ExclusiveMaximum
+		max = *a.Validation.ExclusiveMaximum
 	} else if a.Validation.Maximum != nil {
-		maximum = *a.Validation.Maximum
+		max = *a.Validation.Maximum
 	}
-	switch {
-	case a.Validation.ExclusiveMinimum != nil:
-		minimum = *a.Validation.ExclusiveMinimum
-	case a.Validation.Minimum != nil:
-		minimum = *a.Validation.Minimum
-	default:
+	if a.Validation.ExclusiveMinimum != nil {
+		min = *a.Validation.ExclusiveMinimum
+	} else if a.Validation.Minimum != nil {
+		min = *a.Validation.Minimum
+	} else {
 		sign = -1
-		minimum = maximum
-		maximum = math.Inf(1)
+		min = max
+		max = math.Inf(1)
 	}
 
-	if math.IsInf(maximum, 1) {
+	if math.IsInf(max, 1) {
 		switch a.Type.Kind() {
 		case IntKind:
-			return sign * (r.Int() + int(minimum))
+			return sign * (r.Int() + int(min))
 		case Int32Kind:
-			return int32(sign) * (r.Int32() + int32(minimum))
+			return int32(sign) * (r.Int32() + int32(min))
 		case Int64Kind:
-			return int64(sign) * (r.Int64() + int64(minimum))
+			return int64(sign) * (r.Int64() + int64(min))
 		case UIntKind:
-			return r.UInt() + uint(minimum)
+			return r.UInt() + uint(min)
 		case UInt32Kind:
-			return r.UInt32() + uint32(minimum)
+			return r.UInt32() + uint32(min)
 		case UInt64Kind:
-			return r.UInt64() + uint64(minimum)
+			return r.UInt64() + uint64(min)
 		case Float32Kind:
-			return float32(sign) * (r.Float32() + float32(minimum))
+			return float32(sign) * (r.Float32() + float32(min))
 		default:
-			return float64(sign) * (r.Float64() + minimum)
+			return float64(sign) * (r.Float64() + min)
 		}
 	}
-	if minimum < maximum {
-		delta := maximum - minimum
+	if min < max {
+		delta := max - min
 		switch a.Type.Kind() {
 		case IntKind:
-			return r.Int()%int(delta) + int(minimum)
+			return r.Int()%int(delta) + int(min)
 		case Int32Kind:
-			return r.Int32()%int32(delta) + int32(minimum)
+			return r.Int32()%int32(delta) + int32(min)
 		case Int64Kind:
-			return r.Int64()%int64(delta) + int64(minimum)
+			return r.Int64()%int64(delta) + int64(min)
 		case UIntKind:
-			return r.UInt()%uint(delta) + uint(minimum)
+			return r.UInt()%uint(delta) + uint(min)
 		case UInt32Kind:
-			return r.UInt32()%uint32(delta) + uint32(minimum)
+			return r.UInt32()%uint32(delta) + uint32(min)
 		case UInt64Kind:
-			return r.UInt64()%uint64(delta) + uint64(minimum)
+			return r.UInt64()%uint64(delta) + uint64(min)
 		case Float32Kind:
-			return r.Float32()*float32(delta) + float32(minimum)
+			return r.Float32()*float32(delta) + float32(min)
 		default:
-			return r.Float64()*delta + minimum
+			return r.Float64()*delta + min
 		}
 	}
 	switch a.Type.Kind() {
 	case IntKind:
-		return int(minimum)
+		return int(min)
 	case Int32Kind:
-		return int32(minimum)
+		return int32(min)
 	case Int64Kind:
-		return int64(minimum)
+		return int64(min)
 	case UIntKind:
-		return uint(minimum)
+		return uint(min)
 	case UInt32Kind:
-		return uint32(minimum)
+		return uint32(min)
 	case UInt64Kind:
-		return uint64(minimum)
+		return uint64(min)
 	case Float32Kind:
-		return float32(minimum)
+		return float32(min)
 	default:
-		return minimum
+		return min
 	}
 }
 
@@ -399,31 +351,31 @@ func checkMinMaxValue(a *AttributeExpr, example any) bool {
 	if !hasMinMaxValidation(a) {
 		return true
 	}
-	var minimum *float64
+	var min *float64
 	if a.Validation.ExclusiveMinimum != nil {
-		minimum = a.Validation.ExclusiveMinimum
+		min = a.Validation.ExclusiveMinimum
 	}
 	if a.Validation.Minimum != nil {
-		minimum = a.Validation.Minimum
+		min = a.Validation.Minimum
 	}
-	if minimum != nil {
-		if v, ok := example.(int); ok && float64(v) < *minimum {
+	if min != nil {
+		if v, ok := example.(int); ok && float64(v) < *min {
 			return false
-		} else if v, ok := example.(float64); ok && v < *minimum {
+		} else if v, ok := example.(float64); ok && v < *min {
 			return false
 		}
 	}
-	var maximum *float64
+	var max *float64
 	if a.Validation.ExclusiveMaximum != nil {
-		maximum = a.Validation.ExclusiveMaximum
+		max = a.Validation.ExclusiveMaximum
 	}
 	if a.Validation.Maximum != nil {
-		maximum = a.Validation.Maximum
+		max = a.Validation.Maximum
 	}
-	if maximum != nil {
-		if v, ok := example.(int); ok && float64(v) > *maximum {
+	if max != nil {
+		if v, ok := example.(int); ok && float64(v) > *max {
 			return false
-		} else if v, ok := example.(float64); ok && v > *maximum {
+		} else if v, ok := example.(float64); ok && v > *max {
 			return false
 		}
 	}
