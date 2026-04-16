@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/go-testfixtures/testfixtures/v3/shared"
+	_ "github.com/ClickHouse/clickhouse-go/v2"
 )
 
 type clickhouse struct {
@@ -23,14 +23,17 @@ func (h *clickhouse) init(_ *sql.DB) error {
 	return nil
 }
 
-func (clickhouse) getDefaultParamType() ParamType { return ParamTypeDollar }
-func (*clickhouse) databaseName(q shared.Queryable) (string, error) {
+func (*clickhouse) paramType() int {
+	return paramTypeDollar
+}
+
+func (*clickhouse) databaseName(q queryable) (string, error) {
 	var dbName string
 	err := q.QueryRow("SELECT DATABASE()").Scan(&dbName)
 	return dbName, err
 }
 
-func (h *clickhouse) tableNames(q shared.Queryable) ([]string, error) {
+func (h *clickhouse) tableNames(q queryable) ([]string, error) {
 	query := `
 		SELECT name
 		FROM system.tables
@@ -79,6 +82,12 @@ func (h *clickhouse) disableReferentialIntegrity(db *sql.DB, loadFn loadFunction
 	}
 
 	return tx.Commit()
+}
+
+// splitter is a batchSplitter interface implementation. We need it for
+// ClickHouseDB because clickhouse doesn't support multi-statements.
+func (*clickhouse) splitter() []byte {
+	return []byte(";\n")
 }
 
 func (h *clickhouse) cleanTableQuery(tableName string) string {

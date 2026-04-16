@@ -186,7 +186,7 @@ func JWTSecurity(name string, fn ...func()) *expr.SchemeExpr {
 // in the same scope in which case the client may validate any one of the
 // requirements for the request to be authorized.
 //
-// Security must appear in an API, Service or Method expression.
+// Security must appear in a API, Service or Method expression.
 //
 // Security accepts an arbitrary number of security schemes as argument
 // specified by name or by reference and an optional DSL function as last
@@ -228,34 +228,35 @@ func JWTSecurity(name string, fn ...func()) *expr.SchemeExpr {
 //	})
 func Security(args ...any) {
 	var dsl func()
-	if d, ok := args[len(args)-1].(func()); ok {
-		args = args[:len(args)-1]
-		dsl = d
+	{
+		if d, ok := args[len(args)-1].(func()); ok {
+			args = args[:len(args)-1]
+			dsl = d
+		}
 	}
 
-	schemes := make([]*expr.SchemeExpr, len(args))
-	for i, arg := range args {
-		switch val := arg.(type) {
-		case string:
-			for _, s := range expr.Root.Schemes {
-				if s.SchemeName == val {
-					schemes[i] = expr.DupScheme(s)
-					break
+	var schemes []*expr.SchemeExpr
+	{
+		schemes = make([]*expr.SchemeExpr, len(args))
+		for i, arg := range args {
+			switch val := arg.(type) {
+			case string:
+				for _, s := range expr.Root.Schemes {
+					if s.SchemeName == val {
+						schemes[i] = expr.DupScheme(s)
+						break
+					}
 				}
-			}
-			if schemes[i] == nil {
-				eval.ReportError("security scheme %q not found", val)
+				if schemes[i] == nil {
+					eval.ReportError("security scheme %q not found", val)
+					return
+				}
+			case *expr.SchemeExpr:
+				schemes[i] = expr.DupScheme(val)
+			default:
+				eval.InvalidArgError("security scheme or security scheme name", val)
 				return
 			}
-		case *expr.SchemeExpr:
-			if val == nil {
-				eval.InvalidArgError("security scheme", val)
-				return
-			}
-			schemes[i] = expr.DupScheme(val)
-		default:
-			eval.InvalidArgError("security scheme or security scheme name", val)
-			return
 		}
 	}
 
@@ -523,13 +524,13 @@ func Scope(name string, desc ...string) {
 	switch current := eval.Current().(type) {
 	case *expr.SecurityExpr:
 		if len(desc) >= 1 {
-			eval.TooManyArgError()
+			eval.ReportError("too many arguments")
 			return
 		}
 		current.Scopes = append(current.Scopes, name)
 	case *expr.SchemeExpr:
 		if len(desc) > 1 {
-			eval.TooManyArgError()
+			eval.ReportError("too many arguments")
 			return
 		}
 		d := "no description"

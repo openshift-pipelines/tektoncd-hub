@@ -72,16 +72,16 @@ func computeErrorLocation() (file string, line int) {
 	}
 	wd, err := os.Getwd()
 	if err != nil {
-		return file, line
+		return
 	}
 	wd, err = filepath.Abs(wd)
 	if err != nil {
-		return file, line
+		return
 	}
 	f, err := filepath.Rel(wd, file)
 	if err != nil {
-		return file, line
+		return
 	}
 	file = f
-	return file, line
+	return
 }

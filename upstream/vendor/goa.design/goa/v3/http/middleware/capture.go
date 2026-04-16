@@ -41,9 +41,12 @@ func (w *ResponseCapture) Write(b []byte) (int, error) {
 	return n, err
 }
 
-// Flush call http.ResponseController Flush() method
+// Flush implements the http.Flusher interface if the underlying response
+// writer supports it.
 func (w *ResponseCapture) Flush() {
-	_ = http.NewResponseController(w.ResponseWriter).Flush()
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // Push implements the http.Pusher interface if the underlying response

@@ -70,8 +70,7 @@ import (
 //	})
 func Payload(val any, args ...any) {
 	if len(args) > 2 {
-		eval.TooManyArgError()
-		return
+		eval.ReportError("too many arguments")
 	}
 	e, ok := eval.Current().(*expr.MethodExpr)
 	if !ok {
@@ -87,10 +86,6 @@ func Payload(val any, args ...any) {
 // StreamingPayload must appear in a Method expression.
 //
 // The arguments to a StreamingPayload DSL is same as the Payload DSL.
-//
-// StreamingPayload requires a transport that supports client-to-server streaming
-// such as gRPC or WebSockets. When using HTTP or JSON-RPC transports, methods
-// with StreamingPayload must use WebSockets (via GET endpoints).
 //
 // Examples:
 //
@@ -127,23 +122,9 @@ func Payload(val any, args ...any) {
 //	Method("add", func() {
 //	    StreamingPayload(Operands)
 //	})
-//
-//	// WebSocket method with bidirectional streaming
-//	Method("chat", func() {
-//	    StreamingPayload(func() {
-//	        Attribute("message", String)
-//	        Attribute("timestamp", String, Format(FormatDateTime))
-//	        Required("message", "timestamp")
-//	    })
-//	    StreamingResult(ChatMessage)
-//	    HTTP(func() {
-//	        GET("/chat/ws")
-//	    })
-//	})
 func StreamingPayload(val any, args ...any) {
 	if len(args) > 2 {
-		eval.TooManyArgError()
-		return
+		eval.ReportError("too many arguments")
 	}
 	e, ok := eval.Current().(*expr.MethodExpr)
 	if !ok {
@@ -193,13 +174,13 @@ func methodDSL(m *expr.MethodExpr, suffix string, p any, args ...any) *expr.Attr
 	case expr.DataType:
 		att = &expr.AttributeExpr{Type: actual}
 	default:
-		eval.InvalidArgError("type or function", p)
+		eval.ReportError("invalid %s argument, must be a type or a function", suffix)
 		return nil
 	}
 	if len(args) >= 1 {
 		if f, ok := args[len(args)-1].(func()); ok {
 			if fn != nil {
-				eval.InvalidArgError("(type), (func), (type, func), (type, desc) or (type, desc, func)", f)
+				eval.ReportError("invalid arguments in %s call, must be (type), (func), (type, func), (type, desc) or (type, desc, func)", suffix)
 			}
 			fn = f
 		}
