@@ -1,7 +1,8 @@
 contentOrigin:
   repofiles:
     - ./ubi.repo
-packages: [openssh-clients, git, shadow-utils]
+# Explicit openssl-libs avoids incomplete s390x lockfile entries after rpm lock regeneration.
+packages: [openssh-clients, git, shadow-utils, openssl-libs]
 arches:
   # The list of architectures
   - aarch64
