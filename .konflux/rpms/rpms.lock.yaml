@@ -2267,6 +2267,13 @@ arches:
     name: openssl
     evr: 1:1.1.1k-14.el8_10
     sourcerpm: openssl-1.1.1k-14.el8_10.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi8/8/s390x/baseos/os/Packages/o/openssl-libs-1.1.1k-14.el8_10.s390x.rpm
+    repoid: ubi-8-for-s390x-baseos-rpms
+    size: 1213744
+    checksum: sha256:5afefe16ce70e9284ed2dfca9829c1392875c721ce50bd354882d28f051048a5
+    name: openssl-libs
+    evr: 1:1.1.1k-14.el8_10
+    sourcerpm: openssl-1.1.1k-14.el8_10.src.rpm
   - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi8/8/s390x/baseos/os/Packages/p/perl-Carp-1.42-396.el8.noarch.rpm
     repoid: ubi-8-for-s390x-baseos-rpms
     size: 30928
