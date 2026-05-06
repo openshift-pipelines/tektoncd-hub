@@ -42,14 +42,14 @@ COPY --from=builder --chown=1001 $REMOTE_SOURCE/ui/image/location.locations "${N
 CMD /usr/bin/start.sh
 
 LABEL \
-    com.redhat.component="openshift-pipelines-hub-ui-rhel8-container" \
+    com.redhat.component="openshift-pipelines-hub-ui-rhel9-container" \
     cpe="cpe:/a:redhat:openshift_pipelines:1.15::el9" \
     description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
     io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
     io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub ui" \
     io.openshift.tags="tekton,openshift,tektoncd-hub,ui" \
     maintainer="pipelines-extcomm@redhat.com" \
-    name="openshift-pipelines/pipelines-hub-ui-rhel8" \
+    name="openshift-pipelines/pipelines-hub-ui-rhel9" \
     summary="Red Hat OpenShift Pipelines tektoncd-hub ui" \
     version="v1.15.5"
 # trigger rebuild 2026-02-14
