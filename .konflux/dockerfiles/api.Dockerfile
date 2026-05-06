@@ -26,14 +26,14 @@ COPY head ${KO_DATA_PATH}/HEAD
 EXPOSE 8000
 
 LABEL \
-    com.redhat.component="openshift-pipelines-hub-api-rhel9-container" \
+    com.redhat.component="openshift-pipelines-hub-api-rhel8-container" \
     cpe="cpe:/a:redhat:openshift_pipelines:1.15::el9" \
     description="Red Hat OpenShift Pipelines tektoncd-hub api" \
     io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub api" \
     io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub api" \
     io.openshift.tags="tekton,openshift,tektoncd-hub,api" \
     maintainer="pipelines-extcomm@redhat.com" \
-    name="openshift-pipelines/pipelines-hub-api-rhel9" \
+    name="openshift-pipelines/pipelines-hub-api-rhel8" \
     summary="Red Hat OpenShift Pipelines tektoncd-hub api" \
     version="v1.15.5"
 
