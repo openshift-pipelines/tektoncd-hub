@@ -1,5 +1,5 @@
 # Rebuild trigger: 1.15.4 release 2026-01-19
-ARG GO_BUILDER=registry.access.redhat.com/ubi9/go-toolset:1.25
+ARG GO_BUILDER=registry.access.redhat.com/ubi8/go-toolset:latest
 ARG RUNTIME=registry.redhat.io/ubi8/ubi:latest@sha256:5707834a29441848fc20b9a2a17651e198e80aea54dc5df5be6edb471db76046
 
 FROM $GO_BUILDER AS builder
@@ -24,14 +24,14 @@ COPY head ${KO_DATA_PATH}/HEAD
 EXPOSE 8000
 
 LABEL \
-    com.redhat.component="openshift-pipelines-hub-db-migration-rhel9-container" \
+    com.redhat.component="openshift-pipelines-hub-db-migration-rhel8-container" \
     cpe="cpe:/a:redhat:openshift_pipelines:1.15::el9" \
     description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
     io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
     io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
     io.openshift.tags="tekton,openshift,tektoncd-hub,db-migration" \
     maintainer="pipelines-extcomm@redhat.com" \
-    name="openshift-pipelines/pipelines-hub-db-migration-rhel9" \
+    name="openshift-pipelines/pipelines-hub-db-migration-rhel8" \
     summary="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
     version="v1.15.5"
 
