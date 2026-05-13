@@ -69,4 +69,4 @@ LABEL \
     maintainer="pipelines-extcomm@redhat.com" \
     name="openshift-pipelines/pipelines-hub-ui-rhel9" \
     summary="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-    version="vlatest"
+    version="latest"
