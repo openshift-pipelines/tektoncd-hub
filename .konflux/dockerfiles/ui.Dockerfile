@@ -1,8 +1,8 @@
 # --- builder image
-ARG NODEJS_BUILDER=registry.redhat.io/ubi9/nodejs-22@sha256:afbaa8f9df6e676d22e348a891bb2f08785707a45982e287ba3ba03fa91c4d54
-ARG RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal:latest
+ARG NJS_BUILDER=registry.access.redhat.com/ubi10/nodejs-24:latest
+ARG RUNTIME=registry.access.redhat.com/ubi9/nginx-124:latest
 
-FROM $NODEJS_BUILDER AS builder
+FROM $NJS_BUILDER AS builder
 
 ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 
