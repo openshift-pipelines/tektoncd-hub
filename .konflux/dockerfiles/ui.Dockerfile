@@ -1,6 +1,6 @@
 # --- builder image
 ARG NJS_BUILDER=registry.access.redhat.com/ubi10/nodejs-24:latest
-ARG RUNTIME=registry.access.redhat.com/ubi9/nginx-124:latest
+ARG NGX_RUNTIME=registry.access.redhat.com/ubi10/nginx-126:latest
 
 FROM $NJS_BUILDER AS builder
 
@@ -20,7 +20,7 @@ RUN npm clean-install --legacy-peer-deps --ignore-scripts --max-old-space-size=4
     npm run build
 
 # --- runtime image
-FROM $RUNTIME
+FROM $NGX_RUNTIME
 ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
@@ -29,13 +29,6 @@ COPY --from=builder $REMOTE_SOURCE/ui/image/nginx.conf "${NGINX_CONFIGURATION_PA
 ARG VERSION=nightly
 
 USER root
-RUN fips-mode-setup --enable && \
-    update-crypto-policies --set FIPS && \
-    echo "Verifying FIPS kernel parameter:" && \
-    cat /proc/sys/crypto/fips_enabled && \
-    echo "Verifying OpenSSL FIPS status:" && \
-    openssl version -a | grep -i fips && \
-    (openssl md5 /dev/null || echo "MD5 test passed (expected failure in FIPS mode)")
 
 USER root
 # Create writable directory for config.js and ensure proper permissions
