@@ -1,7 +1,7 @@
 # Rebuild trigger: 1.15.4 release 2026-01-19
 # --- builder image
-ARG NODEJS_BUILDER=registry.redhat.io/ubi8/nodejs-20@sha256:7abf4acec0ad770ded216a3cfd45a533998c66056f487b5d5396a98ecbdf0512
-ARG RUNTIME=registry.redhat.io/ubi8/nginx-124@sha256:21037a7392f5654f02c18d5a5475428ae3a747e40b5af9661d47efc17762afe1
+ARG NODEJS_BUILDER=registry.redhat.io/ubi8/nodejs-22@sha256:22d71f64958af0ddb2c9162460715b9767f59a3254807d21d1873df3350d08c2
+ARG RUNTIME=registry.redhat.io/ubi8/nginx-124@sha256:99089976dae92a8c3306449fdd719c6e92d5e2bb3bdf53fa3be64e2cd4db714b
 
 FROM $NODEJS_BUILDER AS builder
 
