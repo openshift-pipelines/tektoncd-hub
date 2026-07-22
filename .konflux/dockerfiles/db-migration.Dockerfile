@@ -25,7 +25,7 @@ EXPOSE 8000
 
 LABEL \
     com.redhat.component="openshift-pipelines-hub-db-migration-rhel9-container" \
-    cpe="cpe:/a:redhat:openshift_pipelines:next::el9" \
+    cpe="cpe:/a:redhat:openshift_pipelines:next::" \
     description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
     io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
     io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub db-migration" \
