@@ -61,7 +61,7 @@ CMD /usr/bin/start.sh
 
 LABEL \
     com.redhat.component="openshift-pipelines-hub-ui-rhel9-container" \
-    cpe="cpe:/a:redhat:openshift_pipelines:next::el9" \
+    cpe="cpe:/a:redhat:openshift_pipelines:next::" \
     description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
     io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub ui" \
     io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub ui" \
