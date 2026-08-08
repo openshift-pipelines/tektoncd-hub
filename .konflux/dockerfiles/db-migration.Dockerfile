@@ -1,6 +1,6 @@
 # Rebuild trigger: 1.15.4 release 2026-01-19
 ARG GO_BUILDER=registry.access.redhat.com/ubi8/go-toolset:latest
-ARG RUNTIME=registry.redhat.io/ubi8/ubi:latest@sha256:5f6964da75a155c1e8603c59a59e383ba8f4407eb1b46b0eff6f4125a288cd81
+ARG RUNTIME=registry.redhat.io/ubi8/ubi:latest@sha256:efe7eaa64e1efb79c34d0e9ec4ac6d0a95f512dfa8673c2d0d7dfa78a6787efe
 
 FROM $GO_BUILDER AS builder
 
