@@ -23,7 +23,8 @@ import (
 	"sync"
 	"time"
 
-	resolutionframework "github.com/tektoncd/pipeline/pkg/resolution/resolver/framework"
+	corev1 "k8s.io/api/core/v1"
+
 	"knative.dev/pkg/configmap"
 )
 
@@ -47,6 +48,12 @@ var (
 
 type cacheConfigKey struct{}
 
+// Config holds the configuration for the resolver cache
+type Config struct {
+	MaxSize int
+	TTL     time.Duration
+}
+
 type CacheConfigStore struct {
 	untyped         *configmap.UntypedStore
 	cacheConfigName string
@@ -59,7 +66,7 @@ func NewCacheConfigStore(cacheConfigName string, logger configmap.Logger) *Cache
 			defaultConfigMapName,
 			logger,
 			configmap.Constructors{
-				getCacheConfigName(): resolutionframework.DataFromConfigMap,
+				getCacheConfigName(): NewConfigFromConfigMap,
 			},
 			onCacheConfigChanged,
 		),
@@ -72,15 +79,16 @@ func (store *CacheConfigStore) WatchConfigs(w configmap.Watcher) {
 	})
 }
 
-func (store *CacheConfigStore) GetResolverConfig() map[string]string {
-	resolverConfig := map[string]string{}
+func (store *CacheConfigStore) GetResolverConfig() *Config {
 	untypedConf := store.untyped.UntypedLoad(store.cacheConfigName)
-	if conf, ok := untypedConf.(map[string]string); ok {
-		for key, val := range conf {
-			resolverConfig[key] = val
-		}
+	if cacheConf, ok := untypedConf.(*Config); ok {
+		return cacheConf
 	}
-	return resolverConfig
+
+	return &Config{
+		MaxSize: defaultCacheSize,
+		TTL:     defaultExpiration,
+	}
 }
 
 // ToContext returns a new context with the cache's configuration
@@ -99,28 +107,40 @@ func getCacheConfigName() string {
 	return defaultConfigMapName
 }
 
+// NewConfigFromConfigMap creates a Config from a ConfigMap
+func NewConfigFromConfigMap(cm *corev1.ConfigMap) (*Config, error) {
+	config := &Config{
+		MaxSize: defaultCacheSize,
+		TTL:     defaultExpiration,
+	}
+
+	if cm == nil {
+		return config, nil
+	}
+
+	if maxSizeStr, ok := cm.Data[maxSizeConfigMapKey]; ok {
+		if parsed, err := strconv.Atoi(maxSizeStr); err == nil && parsed > 0 {
+			config.MaxSize = parsed
+		}
+	}
+
+	if ttlStr, ok := cm.Data[ttlConfigMapKey]; ok {
+		if parsed, err := time.ParseDuration(ttlStr); err == nil && parsed > 0 {
+			config.TTL = parsed
+		}
+	}
+
+	return config, nil
+}
+
 func onCacheConfigChanged(_ string, value any) {
-	conf, ok := value.(map[string]string)
+	config, ok := value.(*Config)
 	if !ok {
 		return
-	}
-
-	maxSize := defaultCacheSize
-	if maxSizeStr, ok := conf[maxSizeConfigMapKey]; ok {
-		if parsed, err := strconv.Atoi(maxSizeStr); err == nil && parsed > 0 {
-			maxSize = parsed
-		}
-	}
-
-	ttl := defaultExpiration
-	if ttlStr, ok := conf[ttlConfigMapKey]; ok {
-		if parsed, err := time.ParseDuration(ttlStr); err == nil && parsed > 0 {
-			ttl = parsed
-		}
 	}
 
 	cacheMu.Lock()
 	defer cacheMu.Unlock()
 
-	sharedCache = newResolverCache(maxSize, ttl)
+	sharedCache = newResolverCache(config.MaxSize, config.TTL)
 }
