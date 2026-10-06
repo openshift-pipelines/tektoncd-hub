@@ -1,4 +1,4 @@
-ARG GO_BUILDER=registry.access.redhat.com/ubi9/go-toolset:latest
+ARG GO_BUILDER=registry.access.redhat.com/ubi9/go-toolset:1.25
 ARG RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 FROM $GO_BUILDER AS builder
@@ -27,7 +27,7 @@ EXPOSE 8000
 
 LABEL \
     com.redhat.component="openshift-pipelines-hub-api-rhel9-container" \
-    cpe="cpe:/a:redhat:openshift_pipelines:next::" \
+    cpe="cpe:/a:redhat:openshift_pipelines:next::el9" \
     description="Red Hat OpenShift Pipelines tektoncd-hub api" \
     io.k8s.description="Red Hat OpenShift Pipelines tektoncd-hub api" \
     io.k8s.display-name="Red Hat OpenShift Pipelines tektoncd-hub api" \
