@@ -51,5 +51,5 @@ LABEL \
     maintainer="pipelines-extcomm@redhat.com" \
     name="openshift-pipelines/pipelines-hub-ui-rhel8" \
     summary="Red Hat OpenShift Pipelines tektoncd-hub ui" \
-    version="v1.15.5"
+    version="v1.15.6"
 # trigger rebuild 2026-02-14
