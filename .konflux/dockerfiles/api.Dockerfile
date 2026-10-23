@@ -18,7 +18,18 @@ RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vend
 FROM $RUNTIME
 ARG VERSION=1.15
 
-RUN dnf install -y openssh-clients git shadow-utils
+# Red Hat's UBI8 CDN occasionally serves momentarily inconsistent repodata
+# across the baseos/appstream repos (e.g. mismatched openssl/openssl-libs
+# builds), causing a transient dependency-resolution failure here. Refresh
+# the metadata cache and retry a few times to ride out that skew instead of
+# failing the whole image build on a transient upstream glitch.
+RUN for i in 1 2 3 4 5; do \
+        dnf clean all && dnf makecache --refresh && \
+        dnf install -y openssh-clients git shadow-utils && exit 0; \
+        echo "dnf install attempt ${i} failed, retrying in 15s..."; \
+        sleep 15; \
+    done; \
+    echo "dnf install failed after 5 attempts"; exit 1
 
 COPY --from=builder /tmp/hub-api-server /ko-app/hub-api-server
 COPY head ${KO_DATA_PATH}/HEAD
