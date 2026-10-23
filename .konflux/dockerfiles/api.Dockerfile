@@ -1,6 +1,6 @@
 # Rebuild trigger: 1.15.4 release 2026-01-19
 ARG GO_BUILDER=registry.redhat.io/ubi8/go-toolset:latest@sha256:f10be871f461b5b2920559e55cf3e594dc1758941b835b7a62b6bd1f08464181
-ARG RUNTIME=registry.redhat.io/ubi8/ubi@sha256:b9d42de318b28ca7025c0c912769a344db82a89f5e3cf84b90d8f75a7ea11310
+ARG RUNTIME=registry.redhat.io/ubi8/ubi-minimal@sha256:2bd312096a71bf37dbc449f380d8b74cbdf385db2f48e07accc3d43c5e7be747
 
 FROM $GO_BUILDER AS builder
 
@@ -18,18 +18,7 @@ RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vend
 FROM $RUNTIME
 ARG VERSION=1.15
 
-# Red Hat's UBI8 CDN occasionally serves momentarily inconsistent repodata
-# across the baseos/appstream repos (e.g. mismatched openssl/openssl-libs
-# builds), causing a transient dependency-resolution failure here. Refresh
-# the metadata cache and retry a few times to ride out that skew instead of
-# failing the whole image build on a transient upstream glitch.
-RUN for i in 1 2 3 4 5; do \
-        dnf clean all && dnf makecache --refresh && \
-        dnf install -y openssh-clients git shadow-utils && exit 0; \
-        echo "dnf install attempt ${i} failed, retrying in 15s..."; \
-        sleep 15; \
-    done; \
-    echo "dnf install failed after 5 attempts"; exit 1
+RUN microdnf install -y openssh-clients git shadow-utils && microdnf clean all
 
 COPY --from=builder /tmp/hub-api-server /ko-app/hub-api-server
 COPY head ${KO_DATA_PATH}/HEAD
