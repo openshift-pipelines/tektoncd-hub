@@ -1,5 +1,5 @@
 ARG GO_BUILDER=registry.access.redhat.com/ubi9/go-toolset:1.25
-ARG RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal:latest
+ARG UBI_RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 FROM $GO_BUILDER AS builder
 
@@ -15,7 +15,7 @@ ENV GOEXPERIMENT=strictfipsruntime
 RUN go build -ldflags="-X 'knative.dev/pkg/changeset.rev=$(cat HEAD)'" -mod=vendor -tags disable_gcp,strictfipsruntime -v -o /tmp/hub-api-server \
     ./api/cmd/api
 
-FROM $RUNTIME
+FROM $UBI_RUNTIME
 ARG VERSION=1.24
 
 RUN microdnf install -y openssh-clients git shadow-utils

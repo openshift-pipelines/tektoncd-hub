@@ -1,6 +1,6 @@
 # --- builder image
 ARG NODEJS_BUILDER=registry.redhat.io/ubi9/nodejs-22@sha256:de0ec3cba702e28f2ea3c232e8e1b53aa0acee4d25f5acfb458afe22a7b66709
-ARG RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal:latest
+ARG UBI_RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal:latest
 
 FROM $NODEJS_BUILDER AS builder
 
@@ -20,7 +20,7 @@ RUN npm clean-install --legacy-peer-deps --ignore-scripts --max-old-space-size=4
     npm run build
 
 # --- runtime image
-FROM $RUNTIME
+FROM $UBI_RUNTIME
 ARG REMOTE_SOURCE=/go/src/github.com/tektoncd/hub
 
 COPY --from=builder $REMOTE_SOURCE/ui/build /opt/app-root/src
